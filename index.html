@@ -217,7 +217,7 @@
     </div>
 
     <script>
-        const CONFIG = {
+        var CONFIG = {
             adminPassword: "8888",
             sessionDuration: 10 * 60 * 1000,
             events: {
@@ -227,76 +227,67 @@
             }
         };
 
-        let localDb = { speed: [], ollie: [], street: [] };
+        var localDb = { speed: [], ollie: [], street: [] };
 
-        // 升級版 UI 渲染：確保每次呼叫都會畫出所有組別
-        function renderBoard(eventId, dataArray, scoreFormatter, isHtml = false) {
-            const container = document.getElementById(eventId);
+        function renderBoard(eventId, dataArray, scoreFormatter, isHtml) {
+            if (isHtml === undefined) isHtml = false;
+            var container = document.getElementById(eventId);
             container.innerHTML = '';
-            const categories = CONFIG.events[eventId].categories;
+            var categories = CONFIG.events[eventId].categories;
 
-            categories.forEach(cat => {
-                const catData = dataArray.filter(item => item.category === cat);
-                const header = document.createElement('h3');
+            categories.forEach(function(cat) {
+                var catData = dataArray.filter(function(item) { return item.category === cat; });
+                var header = document.createElement('h3');
                 header.className = 'category-title';
                 header.textContent = cat;
                 container.appendChild(header);
 
                 if (catData.length === 0) {
-                    const empty = document.createElement('div');
+                    var empty = document.createElement('div');
                     empty.className = 'empty-state';
-                    empty.textContent = `尚無成績`;
+                    empty.textContent = "尚無成績";
                     container.appendChild(empty);
                 } else {
-                    catData.forEach((item, index) => {
-                        const card = document.createElement('div');
+                    catData.forEach(function(item, index) {
+                        var card = document.createElement('div');
                         card.className = 'rank-card';
-                        const scoreContent = isHtml ? scoreFormatter(item) : `<div class="final-score">${scoreFormatter(item)}</div>`;
-                        card.innerHTML = `
-                            <div class="rank-num">${index + 1}</div>
-                            <div class="skater-info">
-                                <div class="skater-id">${item.id} <span class="skater-name">${item.name}</span></div>
-                            </div>
-                            <div>${scoreContent}</div>
-                        `;
+                        var scoreContent = isHtml ? scoreFormatter(item) : '<div class="final-score">' + scoreFormatter(item) + '</div>';
+                        card.innerHTML = 
+                            '<div class="rank-num">' + (index + 1) + '</div>' +
+                            '<div class="skater-info">' +
+                                '<div class="skater-id">' + item.id + ' <span class="skater-name">' + item.name + '</span></div>' +
+                            '</div>' +
+                            '<div>' + scoreContent + '</div>';
                         container.appendChild(card);
                     });
                 }
             });
         }
 
-        // 第一時間強制畫出空嘅排行榜，防止白畫面！
-        renderBoard('speed', [], () => ``);
-        renderBoard('ollie', [], () => ``);
-        renderBoard('street', [], () => ``);
+        renderBoard('speed', [], function() { return ""; });
+        renderBoard('ollie', [], function() { return ""; });
+        renderBoard('street', [], function() { return ""; });
 
-        /**
-         * =========================================================================
-         * ⚠️ 極重要：請將下面 databaseURL 換成你喺 Database 版面 Copy 嗰條真實網址！
-         * =========================================================================
-         */
-        const firebaseConfig = {
+        // 你專屬的 Firebase Config
+        var firebaseConfig = {
           apiKey: "AIzaSyB7MVS392XGq27V24VG94o26gvZpWj_xk4",
           authDomain: "skate-jam-2026.firebaseapp.com",
-          databaseURL: "https://skate-jam-2026-default-rtdb.firebaseio.com/", // <-- 🔴 換走呢行！如果尾綴係 .app，一定要換！
+          databaseURL: "https://skate-jam-2026-default-rtdb.firebaseio.com",
           projectId: "skate-jam-2026",
           storageBucket: "skate-jam-2026.firebasestorage.app",
           messagingSenderId: "1069864791525",
           appId: "1:1069864791525:web:1a4ae110e26bedaaf7930c",
           measurementId: "G-F0TX3VG6R2"
         };
-        // =========================================================================
 
-        const statusEl = document.getElementById('connection-status');
-        let database, dbRef;
+        var statusEl = document.getElementById('connection-status');
+        var database, dbRef;
 
-        // 加入錯誤攔截，如果 Firebase 撞板會即刻話你知
         try {
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
             dbRef = database.ref('skate_jam_2026_scores');
 
-            // 監聽連線狀態
             firebase.database().ref('.info/connected').on('value', function(snap) {
                 if (snap.val() === true) {
                     statusEl.textContent = "🟢 雲端系統已連線 (即時更新中)";
@@ -307,43 +298,47 @@
                 }
             });
 
-            // 監聽資料變更
-            dbRef.on('value', (snapshot) => {
-                const data = snapshot.val();
+            dbRef.on('value', function(snapshot) {
+                var data = snapshot.val();
                 
                 if (data) {
-                    localDb.speed = data.speed ? Object.values(data.speed) : [];
-                    localDb.ollie = data.ollie ? Object.values(data.ollie) : [];
-                    localDb.street = data.street ? Object.values(data.street) : [];
+                    localDb.speed = [];
+                    for(var k1 in data.speed) { if(data.speed.hasOwnProperty(k1)) localDb.speed.push(data.speed[k1]); }
+                    
+                    localDb.ollie = [];
+                    for(var k2 in data.ollie) { if(data.ollie.hasOwnProperty(k2)) localDb.ollie.push(data.ollie[k2]); }
+                    
+                    localDb.street = [];
+                    for(var k3 in data.street) { if(data.street.hasOwnProperty(k3)) localDb.street.push(data.street[k3]); }
                 } else {
                     localDb = { speed: [], ollie: [], street: [] };
                 }
 
-                localDb.speed.sort((a, b) => (a.score - b.score) * CONFIG.events.speed.sortRule);
-                localDb.ollie.sort((a, b) => (a.score - b.score) * CONFIG.events.ollie.sortRule);
-                localDb.street.sort((a, b) => (a.total - b.total) * CONFIG.events.street.sortRule);
+                localDb.speed.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.speed.sortRule; });
+                localDb.ollie.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.ollie.sortRule; });
+                localDb.street.sort(function(a, b) { return (a.total - b.total) * CONFIG.events.street.sortRule; });
 
-                renderBoard('speed', localDb.speed, (d) => `${d.score} ${CONFIG.events.speed.unit}`);
-                renderBoard('ollie', localDb.ollie, (d) => `${d.score} ${CONFIG.events.ollie.unit}`);
-                renderBoard('street', localDb.street, (d) => {
-                    return `<div class="final-score">${d.total.toFixed(1)} ${CONFIG.events.street.unit}</div>
-                            <div class="score-detail">Run: ${d.run} | Trick: ${d.trick}</div>`;
+                renderBoard('speed', localDb.speed, function(d) { return d.score + ' ' + CONFIG.events.speed.unit; });
+                renderBoard('ollie', localDb.ollie, function(d) { return d.score + ' ' + CONFIG.events.ollie.unit; });
+                renderBoard('street', localDb.street, function(d) {
+                    return '<div class="final-score">' + d.total.toFixed(1) + ' ' + CONFIG.events.street.unit + '</div>' +
+                           '<div class="score-detail">Run: ' + d.run + ' | Trick: ' + d.trick + '</div>';
                 }, true);
             });
 
         } catch (error) {
-            statusEl.textContent = "🔴 系統錯誤 (可能是代碼格式或防廣告攔截): " + error.message;
+            statusEl.textContent = "🔴 系統錯誤: " + error.message;
             statusEl.className = 'offline';
         }
 
         // ==========================================
-        // UI 互動邏輯 (Tabs, Forms, Session)
+        // UI 互動邏輯 (按鈕、選單等)
         // ==========================================
         function updateCategoryOptions(eventType) {
-            const catSelect = document.getElementById('category-select');
+            var catSelect = document.getElementById('category-select');
             catSelect.innerHTML = ''; 
-            CONFIG.events[eventType].categories.forEach(cat => {
-                const opt = document.createElement('option');
+            CONFIG.events[eventType].categories.forEach(function(cat) {
+                var opt = document.createElement('option');
                 opt.value = cat;
                 opt.textContent = cat;
                 catSelect.appendChild(opt);
@@ -351,12 +346,19 @@
         }
 
         function checkExistingRecord() {
-            const eventType = document.getElementById('event-select').value;
-            const skaterId = document.getElementById('skater-id').value.trim();
-            const submitBtn = document.getElementById('submit-btn');
+            var eventType = document.getElementById('event-select').value;
+            var skaterId = document.getElementById('skater-id').value.trim();
+            var submitBtn = document.getElementById('submit-btn');
             
             if (!skaterId) return;
-            const existing = localDb[eventType].find(item => item.id === skaterId);
+            
+            var existing = null;
+            for(var i=0; i<localDb[eventType].length; i++) {
+                if(localDb[eventType][i].id === skaterId) {
+                    existing = localDb[eventType][i];
+                    break;
+                }
+            }
             
             if (existing) {
                 document.getElementById('skater-name').value = existing.name || '';
@@ -370,116 +372,124 @@
                 submitBtn.textContent = "更新成績 (上傳至雲端)";
                 submitBtn.style.backgroundColor = "var(--update-color)";
             } else {
-                document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
+                var inputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                for(var j=0; j<inputs.length; j++) inputs[j].value = '';
                 submitBtn.textContent = "新增成績";
                 submitBtn.style.backgroundColor = "var(--accent-color)";
             }
         }
 
         document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
-        document.getElementById('event-select').addEventListener('change', (e) => {
-            const eventType = e.target.value;
-            document.querySelectorAll('.dynamic-input').forEach(el => el.classList.remove('active'));
-            document.getElementById(`input-${eventType}`).classList.add('active');
+        
+        document.getElementById('event-select').addEventListener('change', function(e) {
+            var eventType = e.target.value;
+            var inputs = document.querySelectorAll('.dynamic-input');
+            for(var i=0; i<inputs.length; i++) inputs[i].classList.remove('active');
+            
+            document.getElementById('input-' + eventType).classList.add('active');
             updateCategoryOptions(eventType);
             checkExistingRecord();
         });
 
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.board-container').forEach(c => c.classList.remove('active'));
+        var tabBtns = document.querySelectorAll('.tab-btn');
+        for(var i=0; i<tabBtns.length; i++) {
+            tabBtns[i].addEventListener('click', function(e) {
+                var allBtns = document.querySelectorAll('.tab-btn');
+                for(var j=0; j<allBtns.length; j++) allBtns[j].classList.remove('active');
+                
+                var allBoards = document.querySelectorAll('.board-container');
+                for(var k=0; k<allBoards.length; k++) allBoards[k].classList.remove('active');
+                
                 e.target.classList.add('active');
                 document.getElementById(e.target.getAttribute('data-target')).classList.add('active');
             });
-        });
+        }
 
-        const adminPanel = document.getElementById('admin-panel');
-        document.getElementById('admin-trigger').addEventListener('click', () => {
-            const sessionExpiry = localStorage.getItem('skate_admin_expiry');
-            const now = Date.now();
+        var adminPanel = document.getElementById('admin-panel');
+        document.getElementById('admin-trigger').addEventListener('click', function() {
+            var sessionExpiry = localStorage.getItem('skate_admin_expiry');
+            var now = new Date().getTime();
             if (sessionExpiry && now < parseInt(sessionExpiry)) {
                 localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
                 adminPanel.classList.add('open');
             } else {
-                const pwd = prompt("請輸入管理員密碼：");
+                var pwd = prompt("請輸入管理員密碼 (測試請輸入8888)：");
                 if (pwd === CONFIG.adminPassword) {
-                    localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
+                    localStorage.setItem('skate_admin_expiry', new Date().getTime() + CONFIG.sessionDuration);
                     adminPanel.classList.add('open');
                 } else if (pwd !== null) { alert("密碼錯誤"); }
             }
         });
 
-        document.getElementById('logout-admin').addEventListener('click', () => {
+        document.getElementById('logout-admin').addEventListener('click', function() {
             localStorage.removeItem('skate_admin_expiry');
             adminPanel.classList.remove('open');
             alert("已成功登出。");
         });
-        document.getElementById('close-admin').addEventListener('click', () => adminPanel.classList.remove('open'));
+        
+        document.getElementById('close-admin').addEventListener('click', function() {
+            adminPanel.classList.remove('open');
+        });
 
-        // ==========================================
-        // 上傳成績到 Firebase
-        // ==========================================
-        document.getElementById('score-form').addEventListener('submit', (e) => {
+        document.getElementById('score-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
             if (!database) return alert("系統未能連接雲端，無法上傳成績！");
 
-            localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
+            localStorage.setItem('skate_admin_expiry', new Date().getTime() + CONFIG.sessionDuration);
 
-            const eventType = document.getElementById('event-select').value;
-            const skaterId = document.getElementById('skater-id').value.trim();
-            const skaterName = document.getElementById('skater-name').value.trim();
-            const category = document.getElementById('category-select').value; 
+            var eventType = document.getElementById('event-select').value;
+            var skaterId = document.getElementById('skater-id').value.trim();
+            var skaterName = document.getElementById('skater-name').value.trim();
+            var category = document.getElementById('category-select').value; 
 
             if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
 
-            let newData = { id: skaterId, name: skaterName, category: category }; 
+            var newData = { id: skaterId, name: skaterName, category: category }; 
 
             if (eventType === 'speed') {
-                const score = parseFloat(document.getElementById('score-speed').value);
+                var score = parseFloat(document.getElementById('score-speed').value);
                 if (isNaN(score)) return alert("請輸入有效秒數");
                 newData.score = score;
             } else if (eventType === 'ollie') {
-                const score = parseInt(document.getElementById('score-ollie').value);
+                var score = parseInt(document.getElementById('score-ollie').value);
                 if (isNaN(score)) return alert("請輸入有效塊數");
                 newData.score = score;
             } else if (eventType === 'street') {
-                const run = parseFloat(document.getElementById('score-run').value);
-                const trick = parseFloat(document.getElementById('score-trick').value);
+                var run = parseFloat(document.getElementById('score-run').value);
+                var trick = parseFloat(document.getElementById('score-trick').value);
                 if (isNaN(run) || isNaN(trick)) return alert("請輸入有效的分數");
                 newData.run = run;
                 newData.trick = trick;
                 newData.total = (run * CONFIG.events.street.weights.run) + (trick * CONFIG.events.street.weights.trick);
             }
 
-            database.ref(`skate_jam_2026_scores/${eventType}/${skaterId}`).set(newData)
-                .then(() => {
+            database.ref('skate_jam_2026_scores/' + eventType + '/' + skaterId).set(newData)
+                .then(function() {
                     document.getElementById('skater-id').value = '';
                     document.getElementById('skater-name').value = '';
-                    document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
-                    const submitBtn = document.getElementById('submit-btn');
+                    var inputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                    for(var i=0; i<inputs.length; i++) inputs[i].value = '';
+                    
+                    var submitBtn = document.getElementById('submit-btn');
                     submitBtn.textContent = "新增成績";
                     submitBtn.style.backgroundColor = "var(--accent-color)";
                     
-                    document.querySelector(`.tab-btn[data-target="${eventType}"]`).click();
+                    document.querySelector('.tab-btn[data-target="' + eventType + '"]').click();
                     document.activeElement.blur(); 
                     adminPanel.classList.remove('open');
                 })
-                .catch((error) => {
+                .catch(function(error) {
                     alert("上傳失敗，請檢查網絡連線: " + error.message);
                 });
         });
 
-        // ==========================================
-        // 清除 Firebase 所有成績
-        // ==========================================
-        document.getElementById('clear-data-btn').addEventListener('click', () => {
+        document.getElementById('clear-data-btn').addEventListener('click', function() {
             if (confirm("⚠️ 警告：確定要刪除雲端所有比賽項目的成績嗎？此動作無法復原，所有觀眾的手機都會即時清空！")) {
-                const pwd = prompt("請再次輸入管理員密碼 (預設為 8888)：");
+                var pwd = prompt("請再次輸入管理員密碼 (預設為 8888)：");
                 if (pwd === CONFIG.adminPassword) {
                     if (dbRef) {
-                        dbRef.remove().then(() => {
+                        dbRef.remove().then(function() {
                             alert("✅ 雲端成績已全部清空！");
                             adminPanel.classList.remove('open');
                         });
