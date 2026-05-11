@@ -13,6 +13,7 @@
             --text-main: #111111;
             --text-muted: #666666;
             --accent-color: #000000;
+            --update-color: #ff3b30; /* 更新分數時的紅色警告 */
             --border-color: #e0e0e0;
             --card-bg: #ffffff;
         }
@@ -27,7 +28,6 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* 限制最大寬度，確保在桌面版也維持手機版視覺比例 */
         #app { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; padding-bottom: 80px; }
 
         /* ==========================================
@@ -57,13 +57,13 @@
             border: 1px solid var(--border-color);
         }
         .rank-num { font-size: 1.5rem; font-weight: 800; width: 40px; color: var(--text-muted); }
-        /* 前三名樣式強調 */
         .rank-card:nth-child(1) .rank-num { color: #d4af37; } /* 金 */
         .rank-card:nth-child(2) .rank-num { color: #c0c0c0; } /* 銀 */
         .rank-card:nth-child(3) .rank-num { color: #cd7f32; } /* 銅 */
 
         .skater-info { flex: 1; }
         .skater-id { font-size: 1.1rem; font-weight: 700; }
+        .skater-name { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
         .score-detail { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
         
         .final-score { font-size: 1.2rem; font-weight: 700; text-align: right; }
@@ -87,6 +87,7 @@
             box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
             transform: translateY(100%); transition: transform 0.3s ease;
             z-index: 100; max-width: 480px; margin: 0 auto;
+            max-height: 85vh; overflow-y: auto; /* 防止手機鍵盤遮擋 */
         }
         #admin-panel.open { transform: translateY(0); }
 
@@ -104,10 +105,9 @@
         .btn-submit {
             width: 100%; padding: 14px; background: var(--accent-color); color: white;
             border: none; border-radius: 6px; font-size: 1rem; font-weight: 700;
-            margin-top: 8px; cursor: pointer;
+            margin-top: 8px; cursor: pointer; transition: background-color 0.2s;
         }
 
-        /* 動態表單隱藏類別 */
         .dynamic-input { display: none; }
         .dynamic-input.active { display: block; }
 
@@ -119,24 +119,20 @@
             <h1>Skate Jam 2026</h1>
         </header>
 
-        <!-- 選單切換 -->
         <nav class="tabs">
             <button class="tab-btn active" data-target="speed">速度障礙</button>
             <button class="tab-btn" data-target="ollie">Highest Ollie</button>
             <button class="tab-btn" data-target="street">Street Style</button>
         </nav>
 
-        <!-- 排行榜顯示區 -->
         <main>
             <div id="speed" class="board-container active"></div>
             <div id="ollie" class="board-container"></div>
             <div id="street" class="board-container"></div>
         </main>
 
-        <!-- 觸發管理員面板的按鈕 (實務上可改為透明按鈕或連續點擊標題觸發) -->
         <button id="admin-trigger">⚙️</button>
 
-        <!-- 管理員輸入端 -->
         <section id="admin-panel">
             <div class="admin-header">
                 <h3>管理員輸入</h3>
@@ -157,7 +153,12 @@
                     <input type="text" id="skater-id" placeholder="例如: #001" required autocomplete="off">
                 </div>
 
-                <!-- 根據項目動態切換的輸入框 -->
+                <!-- 新增：參賽者姓名 -->
+                <div class="form-group">
+                    <label>參賽者姓名</label>
+                    <input type="text" id="skater-name" placeholder="例如: 陳大文" required autocomplete="off">
+                </div>
+
                 <div id="input-speed" class="dynamic-input active">
                     <div class="form-group">
                         <label>完成時間 (秒) - 愈短愈好</label>
@@ -183,7 +184,7 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit">送出成績</button>
+                <button type="submit" class="btn-submit" id="submit-btn">新增成績</button>
             </form>
         </section>
     </div>
@@ -192,54 +193,31 @@
         /**
          * ==========================================
          * 系統設定檔與參數說明
-         * 您可以在此處修改項目名稱與分數權重
          * ==========================================
          */
         const CONFIG = {
-            adminPassword: "123", // 簡易密碼保護
+            adminPassword: "8888", // <--- 喺呢度修改管理員密碼
             events: {
-                speed: { 
-                    name: "速度障礙賽", 
-                    unit: "秒",
-                    // sortRule: 1 代表由小到大排序 (秒數愈短愈好)
-                    sortRule: 1 
-                },
-                ollie: { 
-                    name: "Highest Ollie", 
-                    unit: "塊",
-                    // sortRule: -1 代表由大到小排序 (塊數愈多愈好)
-                    sortRule: -1 
-                },
-                street: { 
-                    name: "Street Style", 
-                    unit: "分",
-                    sortRule: -1, // 分數愈高愈好
-                    // 這裡可以設定子項目的權重 (目前為 1:1 相加，若需加權可修改此處比例)
-                    weights: { run: 1.0, trick: 1.0 } 
-                }
+                speed: { name: "速度障礙賽", unit: "秒", sortRule: 1 },
+                ollie: { name: "Highest Ollie", unit: "塊", sortRule: -1 },
+                street: { name: "Street Style", unit: "分", sortRule: -1, weights: { run: 1.0, trick: 1.0 } }
             }
         };
 
-        // 資料狀態管理 (嘗試從 localStorage 讀取，若無則初始化)
         let db = JSON.parse(localStorage.getItem('skate_scores')) || {
-            speed: [],
-            ollie: [],
-            street: []
+            speed: [], ollie: [], street: []
         };
 
         // ==========================================
-        // 核心邏輯：計算與排序
+        // 核心邏輯：計算、排序與儲存
         // ==========================================
         function saveAndRender() {
-            // 將資料存入本機儲存空間
             localStorage.setItem('skate_scores', JSON.stringify(db));
             
-            // 分別對三個項目進行排序
             db.speed.sort((a, b) => (a.score - b.score) * CONFIG.events.speed.sortRule);
             db.ollie.sort((a, b) => (a.score - b.score) * CONFIG.events.ollie.sortRule);
             db.street.sort((a, b) => (a.total - b.total) * CONFIG.events.street.sortRule);
 
-            // 重新渲染 UI
             renderBoard('speed', db.speed, (data) => `${data.score} ${CONFIG.events.speed.unit}`);
             renderBoard('ollie', db.ollie, (data) => `${data.score} ${CONFIG.events.ollie.unit}`);
             renderBoard('street', db.street, (data) => {
@@ -251,7 +229,7 @@
         }
 
         // ==========================================
-        // UI 渲染：繪製排行榜
+        // UI 渲染
         // ==========================================
         function renderBoard(eventId, dataArray, scoreFormatter, isHtml = false) {
             const container = document.getElementById(eventId);
@@ -265,45 +243,77 @@
             dataArray.forEach((item, index) => {
                 const card = document.createElement('div');
                 card.className = 'rank-card';
-                
                 const scoreContent = isHtml ? scoreFormatter(item) : `<div class="final-score">${scoreFormatter(item)}</div>`;
 
+                // 顯示編號與姓名
                 card.innerHTML = `
                     <div class="rank-num">${index + 1}</div>
                     <div class="skater-info">
-                        <div class="skater-id">${item.id}</div>
+                        <div class="skater-id">${item.id} <span class="skater-name">${item.name}</span></div>
                     </div>
-                    <div>
-                        ${scoreContent}
-                    </div>
+                    <div>${scoreContent}</div>
                 `;
                 container.appendChild(card);
             });
         }
 
         // ==========================================
-        // 事件監聽與互動邏輯
+        // 事件監聽：修改分數與表單互動
         // ==========================================
+        
+        // 智能檢查：當輸入編號時，檢查是否已有成績（用於修改）
+        function checkExistingRecord() {
+            const eventType = document.getElementById('event-select').value;
+            const skaterId = document.getElementById('skater-id').value.trim();
+            const submitBtn = document.getElementById('submit-btn');
+            
+            if (!skaterId) return;
 
-        // 1. Tab 切換邏輯
+            // 尋找該項目是否已經有這個編號
+            const existing = db[eventType].find(item => item.id === skaterId);
+            
+            if (existing) {
+                // 如果有，自動帶入姓名與舊分數，並將按鈕轉為紅色警告
+                document.getElementById('skater-name').value = existing.name || '';
+                if (eventType === 'speed') document.getElementById('score-speed').value = existing.score;
+                if (eventType === 'ollie') document.getElementById('score-ollie').value = existing.score;
+                if (eventType === 'street') {
+                    document.getElementById('score-run').value = existing.run;
+                    document.getElementById('score-trick').value = existing.trick;
+                }
+                submitBtn.textContent = "更新成績 (覆寫原有分數)";
+                submitBtn.style.backgroundColor = "var(--update-color)";
+            } else {
+                // 如果沒有，清空分數欄位（保留姓名欄位方便連續輸入），恢復按鈕顏色
+                document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
+                submitBtn.textContent = "新增成績";
+                submitBtn.style.backgroundColor = "var(--accent-color)";
+            }
+        }
+
+        // 綁定智能檢查到編號輸入框與項目選擇框
+        document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
+        document.getElementById('event-select').addEventListener('change', (e) => {
+            // 切換項目時，顯示對應的輸入框並重新檢查紀錄
+            document.querySelectorAll('.dynamic-input').forEach(el => el.classList.remove('active'));
+            document.getElementById(`input-${e.target.value}`).classList.add('active');
+            checkExistingRecord();
+        });
+
+        // Tab 切換
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                // 移除所有 active
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.board-container').forEach(c => c.classList.remove('active'));
-                
-                // 加上當前 active
                 e.target.classList.add('active');
-                const targetId = e.target.getAttribute('data-target');
-                document.getElementById(targetId).classList.add('active');
+                document.getElementById(e.target.getAttribute('data-target')).classList.add('active');
             });
         });
 
-        // 2. 管理員面板開關與動態表單切換
+        // 管理員面板開關
         const adminPanel = document.getElementById('admin-panel');
-        
         document.getElementById('admin-trigger').addEventListener('click', () => {
-            const pwd = prompt("請輸入管理員密碼 (測試請輸入 123)：");
+            const pwd = prompt("請輸入管理員密碼：");
             if (pwd === CONFIG.adminPassword) {
                 adminPanel.classList.add('open');
             } else if (pwd !== null) {
@@ -311,75 +321,61 @@
             }
         });
 
-        document.getElementById('close-admin').addEventListener('click', () => {
-            adminPanel.classList.remove('open');
-        });
+        document.getElementById('close-admin').addEventListener('click', () => adminPanel.classList.remove('open'));
 
-        document.getElementById('event-select').addEventListener('change', (e) => {
-            document.querySelectorAll('.dynamic-input').forEach(el => el.classList.remove('active'));
-            document.getElementById(`input-${e.target.value}`).classList.add('active');
-        });
-
-        // 3. 表單送出邏輯
+        // 表單送出
         document.getElementById('score-form').addEventListener('submit', (e) => {
             e.preventDefault();
             
             const eventType = document.getElementById('event-select').value;
             const skaterId = document.getElementById('skater-id').value.trim();
+            const skaterName = document.getElementById('skater-name').value.trim();
 
-            if (!skaterId) return alert("請輸入參賽者編號");
+            if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
 
-            // 尋找是否已有該選手紀錄（若是則覆寫，否則新增）
             let existingIndex = db[eventType].findIndex(item => item.id === skaterId);
-            let newData = { id: skaterId };
+            let newData = { id: skaterId, name: skaterName }; // 加入姓名
 
-            // 依據不同項目抓取並計算數值
             if (eventType === 'speed') {
                 const score = parseFloat(document.getElementById('score-speed').value);
                 if (isNaN(score)) return alert("請輸入有效秒數");
                 newData.score = score;
-            } 
-            else if (eventType === 'ollie') {
+            } else if (eventType === 'ollie') {
                 const score = parseInt(document.getElementById('score-ollie').value);
                 if (isNaN(score)) return alert("請輸入有效塊數");
                 newData.score = score;
-            } 
-            else if (eventType === 'street') {
+            } else if (eventType === 'street') {
                 const run = parseFloat(document.getElementById('score-run').value);
                 const trick = parseFloat(document.getElementById('score-trick').value);
-                if (isNaN(run) || isNaN(trick)) return alert("請輸入有效的 Run 與 Trick 分數");
-                
+                if (isNaN(run) || isNaN(trick)) return alert("請輸入有效的分數");
                 newData.run = run;
                 newData.trick = trick;
-                // 計算加權總分
                 newData.total = (run * CONFIG.events.street.weights.run) + (trick * CONFIG.events.street.weights.trick);
             }
 
-            // 更新資料庫
+            // 更新或新增資料
             if (existingIndex > -1) {
                 db[eventType][existingIndex] = newData;
             } else {
                 db[eventType].push(newData);
             }
 
-            // 重新計算排序與渲染 UI
             saveAndRender();
 
-            // 清空輸入框
+            // 送出後清空欄位，恢復按鈕狀態
             document.getElementById('skater-id').value = '';
+            document.getElementById('skater-name').value = '';
             document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.textContent = "新增成績";
+            submitBtn.style.backgroundColor = "var(--accent-color)";
             
-            // 切換至對應的 Tab 以便即時查看
             document.querySelector(`.tab-btn[data-target="${eventType}"]`).click();
-            
-            // 收起鍵盤與面板 (優化手機體驗)
             document.activeElement.blur(); 
             adminPanel.classList.remove('open');
         });
 
-        // 初始化第一次渲染
         saveAndRender();
-
     </script>
 </body>
 </html>
