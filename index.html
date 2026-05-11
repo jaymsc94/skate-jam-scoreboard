@@ -6,14 +6,14 @@
     <title>全港校際滑板比賽2026</title>
     <style>
         /* ==========================================
-           1. 變數與基礎設定 (極簡風格)
+           1. 變數與基礎設定
            ========================================== */
         :root {
             --bg-color: #f9f9f9;
             --text-main: #111111;
             --text-muted: #666666;
             --accent-color: #000000;
-            --update-color: #ff3b30; /* 更新分數時的紅色警告 */
+            --update-color: #ff3b30;
             --border-color: #e0e0e0;
             --card-bg: #ffffff;
         }
@@ -38,17 +38,24 @@
 
         .tabs { display: flex; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         .tab-btn {
-            flex: 1; padding: 12px 0; border: none; background: none; 
-            font-size: 0.9rem; font-weight: 600; color: var(--text-muted);
+            flex: 1; padding: 12px 4px; border: none; background: none; 
+            font-size: 0.85rem; font-weight: 700; color: var(--text-muted);
             cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent;
         }
         .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
 
         /* ==========================================
-           3. 排行榜列表 UI
+           3. 排行榜列表 UI (含分組標題)
            ========================================== */
         .board-container { padding: 16px; display: none; }
         .board-container.active { display: block; }
+
+        .category-title {
+            font-size: 1.1rem; font-weight: 800; color: var(--accent-color);
+            margin: 24px 0 12px 0; padding-bottom: 8px;
+            border-bottom: 2px solid var(--accent-color);
+        }
+        .category-title:first-child { margin-top: 0; }
 
         .rank-card {
             display: flex; align-items: center; background: var(--card-bg);
@@ -57,9 +64,9 @@
             border: 1px solid var(--border-color);
         }
         .rank-num { font-size: 1.5rem; font-weight: 800; width: 40px; color: var(--text-muted); }
-        .rank-card:nth-child(1) .rank-num { color: #d4af37; } /* 金 */
-        .rank-card:nth-child(2) .rank-num { color: #c0c0c0; } /* 銀 */
-        .rank-card:nth-child(3) .rank-num { color: #cd7f32; } /* 銅 */
+        .rank-card:nth-of-type(1) .rank-num { color: #d4af37; } 
+        .rank-card:nth-of-type(2) .rank-num { color: #c0c0c0; } 
+        .rank-card:nth-of-type(3) .rank-num { color: #cd7f32; } 
 
         .skater-info { flex: 1; }
         .skater-id { font-size: 1.1rem; font-weight: 700; }
@@ -68,10 +75,10 @@
         
         .final-score { font-size: 1.2rem; font-weight: 700; text-align: right; }
 
-        .empty-state { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 0.9rem; }
+        .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; margin-bottom: 20px; }
 
         /* ==========================================
-           4. 管理員後台 (隱藏與顯示)
+           4. 管理員後台
            ========================================== */
         #admin-trigger {
             position: fixed; bottom: 20px; right: 20px;
@@ -92,7 +99,12 @@
         #admin-panel.open { transform: translateY(0); }
 
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .close-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; }
+        .admin-header h3 { margin: 0; }
+        
+        /* 登出與關閉按鈕區域 */
+        .admin-actions { display: flex; align-items: center; gap: 12px; }
+        .logout-btn { background: none; border: none; font-size: 0.9rem; color: var(--update-color); font-weight: 600; cursor: pointer; text-decoration: underline; }
+        .close-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; line-height: 1; }
 
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); }
@@ -127,8 +139,8 @@
 
         <nav class="tabs">
             <button class="tab-btn active" data-target="speed">速度障礙</button>
-            <button class="tab-btn" data-target="ollie">Highest Ollie</button>
-            <button class="tab-btn" data-target="street">Street Style</button>
+            <button class="tab-btn" data-target="ollie">豚跳鬥高</button>
+            <button class="tab-btn" data-target="street">街式滑板</button>
         </nav>
 
         <main>
@@ -142,18 +154,26 @@
         <section id="admin-panel">
             <div class="admin-header">
                 <h3>管理員輸入</h3>
-                <button class="close-btn" id="close-admin">&times;</button>
+                <div class="admin-actions">
+                    <button class="logout-btn" id="logout-admin">登出</button>
+                    <button class="close-btn" id="close-admin">&times;</button>
+                </div>
             </div>
             <form id="score-form">
                 <div class="form-group">
                     <label>選擇比賽項目</label>
                     <select id="event-select" required>
-                        <option value="speed">速度障礙賽 (秒數)</option>
-                        <option value="ollie">Highest Ollie (滑板塊數)</option>
-                        <option value="street">Street Style (綜合評分)</option>
+                        <option value="speed">速度障礙比賽 (Speed Run Contest)</option>
+                        <option value="ollie">豚跳鬥高比賽 (Highest Ollie Contest)</option>
+                        <option value="street">街式滑板比賽 (Streetstyle Contest)</option>
                     </select>
                 </div>
                 
+                <div class="form-group">
+                    <label>選擇組別</label>
+                    <select id="category-select" required></select>
+                </div>
+
                 <div class="form-group">
                     <label>參賽者編號</label>
                     <input type="text" id="skater-id" placeholder="例如: #001" required autocomplete="off">
@@ -192,20 +212,34 @@
                 <button type="submit" class="btn-submit" id="submit-btn">新增成績</button>
             </form>
 
-            <!-- 新增：清除資料分隔線與按鈕 -->
             <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border-color);">
-            <button type="button" id="clear-data-btn" class="btn-clear">🗑️ 清除所有測試成績</button>
+            <button type="button" id="clear-data-btn" class="btn-clear">🗑️ 清除所有成績</button>
             
         </section>
     </div>
 
     <script>
+        /**
+         * ==========================================
+         * 系統設定檔
+         * ==========================================
+         */
         const CONFIG = {
-            adminPassword: "8888", // 管理員密碼
+            adminPassword: "8888",
+            sessionDuration: 10 * 60 * 1000, // 10分鐘 (單位: 毫秒)
             events: {
-                speed: { name: "速度障礙賽", unit: "秒", sortRule: 1 },
-                ollie: { name: "Highest Ollie", unit: "塊", sortRule: -1 },
-                street: { name: "Street Style", unit: "分", sortRule: -1, weights: { run: 1.0, trick: 1.0 } }
+                speed: { 
+                    name: "速度障礙比賽", unit: "秒", sortRule: 1,
+                    categories: ["小學男子組", "小學女子組"]
+                },
+                ollie: { 
+                    name: "豚跳鬥高比賽", unit: "塊", sortRule: -1,
+                    categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"]
+                },
+                street: { 
+                    name: "街式滑板比賽", unit: "分", sortRule: -1, weights: { run: 1.0, trick: 1.0 },
+                    categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"]
+                }
             }
         };
 
@@ -233,25 +267,47 @@
         function renderBoard(eventId, dataArray, scoreFormatter, isHtml = false) {
             const container = document.getElementById(eventId);
             container.innerHTML = '';
+            const categories = CONFIG.events[eventId].categories;
 
-            if (dataArray.length === 0) {
-                container.innerHTML = `<div class="empty-state">目前尚無成績紀錄</div>`;
-                return;
-            }
+            categories.forEach(cat => {
+                const catData = dataArray.filter(item => item.category === cat);
+                const header = document.createElement('h3');
+                header.className = 'category-title';
+                header.textContent = cat;
+                container.appendChild(header);
 
-            dataArray.forEach((item, index) => {
-                const card = document.createElement('div');
-                card.className = 'rank-card';
-                const scoreContent = isHtml ? scoreFormatter(item) : `<div class="final-score">${scoreFormatter(item)}</div>`;
+                if (catData.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'empty-state';
+                    empty.textContent = `尚無成績`;
+                    container.appendChild(empty);
+                } else {
+                    catData.forEach((item, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'rank-card';
+                        const scoreContent = isHtml ? scoreFormatter(item) : `<div class="final-score">${scoreFormatter(item)}</div>`;
 
-                card.innerHTML = `
-                    <div class="rank-num">${index + 1}</div>
-                    <div class="skater-info">
-                        <div class="skater-id">${item.id} <span class="skater-name">${item.name}</span></div>
-                    </div>
-                    <div>${scoreContent}</div>
-                `;
-                container.appendChild(card);
+                        card.innerHTML = `
+                            <div class="rank-num">${index + 1}</div>
+                            <div class="skater-info">
+                                <div class="skater-id">${item.id} <span class="skater-name">${item.name}</span></div>
+                            </div>
+                            <div>${scoreContent}</div>
+                        `;
+                        container.appendChild(card);
+                    });
+                }
+            });
+        }
+
+        function updateCategoryOptions(eventType) {
+            const catSelect = document.getElementById('category-select');
+            catSelect.innerHTML = ''; 
+            CONFIG.events[eventType].categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
             });
         }
 
@@ -266,6 +322,8 @@
             
             if (existing) {
                 document.getElementById('skater-name').value = existing.name || '';
+                if (existing.category) document.getElementById('category-select').value = existing.category;
+                
                 if (eventType === 'speed') document.getElementById('score-speed').value = existing.score;
                 if (eventType === 'ollie') document.getElementById('score-ollie').value = existing.score;
                 if (eventType === 'street') {
@@ -283,8 +341,10 @@
 
         document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
         document.getElementById('event-select').addEventListener('change', (e) => {
+            const eventType = e.target.value;
             document.querySelectorAll('.dynamic-input').forEach(el => el.classList.remove('active'));
-            document.getElementById(`input-${e.target.value}`).classList.add('active');
+            document.getElementById(`input-${eventType}`).classList.add('active');
+            updateCategoryOptions(eventType);
             checkExistingRecord();
         });
 
@@ -297,30 +357,60 @@
             });
         });
 
+        // ==========================================
+        // Session (免密碼登入) 邏輯
+        // ==========================================
         const adminPanel = document.getElementById('admin-panel');
+        
         document.getElementById('admin-trigger').addEventListener('click', () => {
-            const pwd = prompt("請輸入管理員密碼：");
-            if (pwd === CONFIG.adminPassword) {
+            const sessionExpiry = localStorage.getItem('skate_admin_expiry');
+            const now = Date.now();
+
+            // 檢查 Session 是否存在且未過期
+            if (sessionExpiry && now < parseInt(sessionExpiry)) {
+                // 自動續期 10 分鐘，並打開面板
+                localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
                 adminPanel.classList.add('open');
-            } else if (pwd !== null) {
-                alert("密碼錯誤");
+            } else {
+                // Session 過期或未登入，要求密碼
+                const pwd = prompt("請輸入管理員密碼：");
+                if (pwd === CONFIG.adminPassword) {
+                    // 登入成功，設定 10 分鐘過期時間
+                    localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
+                    adminPanel.classList.add('open');
+                } else if (pwd !== null) {
+                    alert("密碼錯誤");
+                }
             }
+        });
+
+        // 登出按鈕邏輯
+        document.getElementById('logout-admin').addEventListener('click', () => {
+            localStorage.removeItem('skate_admin_expiry'); // 清除 Session
+            adminPanel.classList.remove('open');
+            alert("已成功登出。");
         });
 
         document.getElementById('close-admin').addEventListener('click', () => adminPanel.classList.remove('open'));
 
-        // 新增成績邏輯
+        // ==========================================
+        // 送出成績
+        // ==========================================
         document.getElementById('score-form').addEventListener('submit', (e) => {
             e.preventDefault();
             
+            // 每次送出成績時，自動為 Session 續期 10 分鐘
+            localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
+
             const eventType = document.getElementById('event-select').value;
             const skaterId = document.getElementById('skater-id').value.trim();
             const skaterName = document.getElementById('skater-name').value.trim();
+            const category = document.getElementById('category-select').value; 
 
             if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
 
             let existingIndex = db[eventType].findIndex(item => item.id === skaterId);
-            let newData = { id: skaterId, name: skaterName };
+            let newData = { id: skaterId, name: skaterName, category: category }; 
 
             if (eventType === 'speed') {
                 const score = parseFloat(document.getElementById('score-speed').value);
@@ -359,20 +449,13 @@
             adminPanel.classList.remove('open');
         });
 
-        // ==========================================
-        // 新增：清除所有成績邏輯
-        // ==========================================
         document.getElementById('clear-data-btn').addEventListener('click', () => {
-            // 彈出警告確認
             if (confirm("⚠️ 警告：確定要刪除所有比賽項目的成績嗎？此動作無法復原！")) {
-                // 再次要求輸入密碼確認
-                const pwd = prompt("為安全起見，請再次輸入管理員密碼 (預設為 8888)：");
+                const pwd = prompt("請再次輸入管理員密碼 (預設為 8888)：");
                 if (pwd === CONFIG.adminPassword) {
-                    // 重設資料庫為空陣列
                     db = { speed: [], ollie: [], street: [] };
-                    // 儲存並重新渲染畫面
                     saveAndRender();
-                    alert("✅ 所有成績已成功清除，可以開始新比賽了！");
+                    alert("✅ 所有成績已成功清除！");
                     adminPanel.classList.remove('open');
                 } else if (pwd !== null) {
                     alert("❌ 密碼錯誤，取消清除動作。");
@@ -380,6 +463,7 @@
             }
         });
 
+        updateCategoryOptions('speed'); 
         saveAndRender();
     </script>
 </body>
