@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>全港校際滑板比賽2026</title>
+    
+    <!-- 引入 Firebase 實時資料庫 SDK (使用 Compat 版本方便單檔執行) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
     <style>
         /* ==========================================
            1. 變數與基礎設定
@@ -36,6 +41,12 @@
         header { padding: 20px 16px; text-align: center; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; }
 
+        /* 新增：實時連線狀態顯示 */
+        #connection-status { 
+            font-size: 0.75rem; color: #4CAF50; margin-top: 4px; font-weight: 600;
+        }
+        #connection-status.offline { color: var(--update-color); }
+
         .tabs { display: flex; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         .tab-btn {
             flex: 1; padding: 12px 4px; border: none; background: none; 
@@ -45,7 +56,7 @@
         .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
 
         /* ==========================================
-           3. 排行榜列表 UI (含分組標題)
+           3. 排行榜列表 UI
            ========================================== */
         .board-container { padding: 16px; display: none; }
         .board-container.active { display: block; }
@@ -62,7 +73,10 @@
             padding: 16px; margin-bottom: 12px; border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             border: 1px solid var(--border-color);
+            animation: fadeIn 0.3s ease-out; /* 新增成績時的動畫 */
         }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
         .rank-num { font-size: 1.5rem; font-weight: 800; width: 40px; color: var(--text-muted); }
         .rank-card:nth-of-type(1) .rank-num { color: #d4af37; } 
         .rank-card:nth-of-type(2) .rank-num { color: #c0c0c0; } 
@@ -100,8 +114,6 @@
 
         .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .admin-header h3 { margin: 0; }
-        
-        /* 登出與關閉按鈕區域 */
         .admin-actions { display: flex; align-items: center; gap: 12px; }
         .logout-btn { background: none; border: none; font-size: 0.9rem; color: var(--update-color); font-weight: 600; cursor: pointer; text-decoration: underline; }
         .close-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; line-height: 1; }
@@ -135,6 +147,7 @@
     <div id="app">
         <header>
             <h1>全港校際滑板比賽2026</h1>
+            <div id="connection-status">🟡 正在連接雲端系統...</div>
         </header>
 
         <nav class="tabs">
@@ -213,62 +226,102 @@
             </form>
 
             <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border-color);">
-            <button type="button" id="clear-data-btn" class="btn-clear">🗑️ 清除所有成績</button>
+            <button type="button" id="clear-data-btn" class="btn-clear">🗑️ 清除雲端所有成績</button>
             
         </section>
     </div>
 
     <script>
         /**
-         * ==========================================
-         * 系統設定檔
-         * ==========================================
+         * =========================================================================
+         * ⚠️ 極重要：請將你喺 Firebase 複製嘅 firebaseConfig 貼喺下面覆蓋呢段！
+         * =========================================================================
          */
+        const firebaseConfig = {
+            apiKey: "AIzaSy你的API密鑰XXXXXXXXX",
+            authDomain: "你的專案ID.firebaseapp.com",
+            databaseURL: "https://你的專案ID-default-rtdb.firebaseio.com", // <-- 呢行最重要，確保有
+            projectId: "你的專案ID",
+            storageBucket: "你的專案ID.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdefg"
+        };
+        // =========================================================================
+
+        // 初始化 Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const dbRef = database.ref('skate_jam_2026_scores');
+
+        // 監聽連線狀態
+        const statusEl = document.getElementById('connection-status');
+        firebase.database().ref('.info/connected').on('value', function(snap) {
+            if (snap.val() === true) {
+                statusEl.textContent = "🟢 雲端系統已連線 (即時更新中)";
+                statusEl.classList.remove('offline');
+            } else {
+                statusEl.textContent = "🔴 離線狀態 (請檢查網絡)";
+                statusEl.classList.add('offline');
+            }
+        });
+
         const CONFIG = {
             adminPassword: "8888",
-            sessionDuration: 10 * 60 * 1000, // 10分鐘 (單位: 毫秒)
+            sessionDuration: 10 * 60 * 1000,
             events: {
-                speed: { 
-                    name: "速度障礙比賽", unit: "秒", sortRule: 1,
-                    categories: ["小學男子組", "小學女子組"]
-                },
-                ollie: { 
-                    name: "豚跳鬥高比賽", unit: "塊", sortRule: -1,
-                    categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"]
-                },
-                street: { 
-                    name: "街式滑板比賽", unit: "分", sortRule: -1, weights: { run: 1.0, trick: 1.0 },
-                    categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"]
-                }
+                speed: { name: "速度障礙比賽", unit: "秒", sortRule: 1, categories: ["小學男子組", "小學女子組"] },
+                ollie: { name: "豚跳鬥高比賽", unit: "塊", sortRule: -1, categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"] },
+                street: { name: "街式滑板比賽", unit: "分", sortRule: -1, weights: { run: 1.0, trick: 1.0 }, categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"] }
             }
         };
 
-        let db = JSON.parse(localStorage.getItem('skate_scores')) || {
-            speed: [], ollie: [], street: []
-        };
+        let localDb = { speed: [], ollie: [], street: [] };
 
-        function saveAndRender() {
-            localStorage.setItem('skate_scores', JSON.stringify(db));
+        // ==========================================
+        // 核心：Firebase 實時監聽資料變更
+        // (只要雲端有資料變，呢個 function 就會自動行，更新畫面)
+        // ==========================================
+        dbRef.on('value', (snapshot) => {
+            const data = snapshot.val();
             
-            db.speed.sort((a, b) => (a.score - b.score) * CONFIG.events.speed.sortRule);
-            db.ollie.sort((a, b) => (a.score - b.score) * CONFIG.events.ollie.sortRule);
-            db.street.sort((a, b) => (a.total - b.total) * CONFIG.events.street.sortRule);
+            // 將 Firebase 的 Object 結構轉換回 Array 以便排序
+            if (data) {
+                localDb.speed = data.speed ? Object.values(data.speed) : [];
+                localDb.ollie = data.ollie ? Object.values(data.ollie) : [];
+                localDb.street = data.street ? Object.values(data.street) : [];
+            } else {
+                localDb = { speed: [], ollie: [], street: [] };
+            }
 
-            renderBoard('speed', db.speed, (data) => `${data.score} ${CONFIG.events.speed.unit}`);
-            renderBoard('ollie', db.ollie, (data) => `${data.score} ${CONFIG.events.ollie.unit}`);
-            renderBoard('street', db.street, (data) => {
-                return `
-                    <div class="final-score">${data.total.toFixed(1)} ${CONFIG.events.street.unit}</div>
-                    <div class="score-detail">Run: ${data.run} | Trick: ${data.trick}</div>
-                `;
+            // 進行排序
+            localDb.speed.sort((a, b) => (a.score - b.score) * CONFIG.events.speed.sortRule);
+            localDb.ollie.sort((a, b) => (a.score - b.score) * CONFIG.events.ollie.sortRule);
+            localDb.street.sort((a, b) => (a.total - b.total) * CONFIG.events.street.sortRule);
+
+            // 渲染畫面
+            renderBoard('speed', localDb.speed, (d) => `${d.score} ${CONFIG.events.speed.unit}`);
+            renderBoard('ollie', localDb.ollie, (d) => `${d.score} ${CONFIG.events.ollie.unit}`);
+            renderBoard('street', localDb.street, (d) => {
+                return `<div class="final-score">${d.total.toFixed(1)} ${CONFIG.events.street.unit}</div>
+                        <div class="score-detail">Run: ${d.run} | Trick: ${d.trick}</div>`;
             }, true);
-        }
+        });
 
+        // 升級版 UI 渲染
         function renderBoard(eventId, dataArray, scoreFormatter, isHtml = false) {
             const container = document.getElementById(eventId);
             container.innerHTML = '';
             const categories = CONFIG.events[eventId].categories;
-
+const firebaseConfig = {
+  apiKey: "AIzaSyB7MVS392XGq27V24VG94o26gvZpWj_xk4",
+  authDomain: "skate-jam-2026.firebaseapp.com",
+  databaseURL: "https://skate-jam-2026-default-rtdb.firebaseio.com",
+  projectId: "skate-jam-2026",
+  storageBucket: "skate-jam-2026.firebasestorage.app",
+  messagingSenderId: "1069864791525",
+  appId: "1:1069864791525:web:1a4ae110e26bedaaf7930c",
+  measurementId: "G-F0TX3VG6R2"
+}
             categories.forEach(cat => {
                 const catData = dataArray.filter(item => item.category === cat);
                 const header = document.createElement('h3');
@@ -286,7 +339,6 @@
                         const card = document.createElement('div');
                         card.className = 'rank-card';
                         const scoreContent = isHtml ? scoreFormatter(item) : `<div class="final-score">${scoreFormatter(item)}</div>`;
-
                         card.innerHTML = `
                             <div class="rank-num">${index + 1}</div>
                             <div class="skater-info">
@@ -300,6 +352,9 @@
             });
         }
 
+        // ==========================================
+        // UI 互動邏輯 (Tabs, Forms, Session)
+        // ==========================================
         function updateCategoryOptions(eventType) {
             const catSelect = document.getElementById('category-select');
             catSelect.innerHTML = ''; 
@@ -317,20 +372,18 @@
             const submitBtn = document.getElementById('submit-btn');
             
             if (!skaterId) return;
-
-            const existing = db[eventType].find(item => item.id === skaterId);
+            const existing = localDb[eventType].find(item => item.id === skaterId);
             
             if (existing) {
                 document.getElementById('skater-name').value = existing.name || '';
                 if (existing.category) document.getElementById('category-select').value = existing.category;
-                
                 if (eventType === 'speed') document.getElementById('score-speed').value = existing.score;
                 if (eventType === 'ollie') document.getElementById('score-ollie').value = existing.score;
                 if (eventType === 'street') {
                     document.getElementById('score-run').value = existing.run;
                     document.getElementById('score-trick').value = existing.trick;
                 }
-                submitBtn.textContent = "更新成績 (覆寫原有分數)";
+                submitBtn.textContent = "更新成績 (上傳至雲端)";
                 submitBtn.style.backgroundColor = "var(--update-color)";
             } else {
                 document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
@@ -357,49 +410,34 @@
             });
         });
 
-        // ==========================================
-        // Session (免密碼登入) 邏輯
-        // ==========================================
         const adminPanel = document.getElementById('admin-panel');
-        
         document.getElementById('admin-trigger').addEventListener('click', () => {
             const sessionExpiry = localStorage.getItem('skate_admin_expiry');
             const now = Date.now();
-
-            // 檢查 Session 是否存在且未過期
             if (sessionExpiry && now < parseInt(sessionExpiry)) {
-                // 自動續期 10 分鐘，並打開面板
                 localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
                 adminPanel.classList.add('open');
             } else {
-                // Session 過期或未登入，要求密碼
                 const pwd = prompt("請輸入管理員密碼：");
                 if (pwd === CONFIG.adminPassword) {
-                    // 登入成功，設定 10 分鐘過期時間
                     localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
                     adminPanel.classList.add('open');
-                } else if (pwd !== null) {
-                    alert("密碼錯誤");
-                }
+                } else if (pwd !== null) { alert("密碼錯誤"); }
             }
         });
 
-        // 登出按鈕邏輯
         document.getElementById('logout-admin').addEventListener('click', () => {
-            localStorage.removeItem('skate_admin_expiry'); // 清除 Session
+            localStorage.removeItem('skate_admin_expiry');
             adminPanel.classList.remove('open');
             alert("已成功登出。");
         });
-
         document.getElementById('close-admin').addEventListener('click', () => adminPanel.classList.remove('open'));
 
         // ==========================================
-        // 送出成績
+        // 上傳成績到 Firebase
         // ==========================================
         document.getElementById('score-form').addEventListener('submit', (e) => {
             e.preventDefault();
-            
-            // 每次送出成績時，自動為 Session 續期 10 分鐘
             localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
 
             const eventType = document.getElementById('event-select').value;
@@ -409,7 +447,6 @@
 
             if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
 
-            let existingIndex = db[eventType].findIndex(item => item.id === skaterId);
             let newData = { id: skaterId, name: skaterName, category: category }; 
 
             if (eventType === 'speed') {
@@ -429,34 +466,37 @@
                 newData.total = (run * CONFIG.events.street.weights.run) + (trick * CONFIG.events.street.weights.trick);
             }
 
-            if (existingIndex > -1) {
-                db[eventType][existingIndex] = newData;
-            } else {
-                db[eventType].push(newData);
-            }
-
-            saveAndRender();
-
-            document.getElementById('skater-id').value = '';
-            document.getElementById('skater-name').value = '';
-            document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
-            const submitBtn = document.getElementById('submit-btn');
-            submitBtn.textContent = "新增成績";
-            submitBtn.style.backgroundColor = "var(--accent-color)";
-            
-            document.querySelector(`.tab-btn[data-target="${eventType}"]`).click();
-            document.activeElement.blur(); 
-            adminPanel.classList.remove('open');
+            // 使用 skaterId 作為 key，覆寫或新增該選手在該項目的成績
+            database.ref(`skate_jam_2026_scores/${eventType}/${skaterId}`).set(newData)
+                .then(() => {
+                    // 成功後清空欄位
+                    document.getElementById('skater-id').value = '';
+                    document.getElementById('skater-name').value = '';
+                    document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
+                    const submitBtn = document.getElementById('submit-btn');
+                    submitBtn.textContent = "新增成績";
+                    submitBtn.style.backgroundColor = "var(--accent-color)";
+                    
+                    document.querySelector(`.tab-btn[data-target="${eventType}"]`).click();
+                    document.activeElement.blur(); 
+                    adminPanel.classList.remove('open');
+                })
+                .catch((error) => {
+                    alert("上傳失敗，請檢查網絡連線: " + error.message);
+                });
         });
 
+        // ==========================================
+        // 清除 Firebase 所有成績
+        // ==========================================
         document.getElementById('clear-data-btn').addEventListener('click', () => {
-            if (confirm("⚠️ 警告：確定要刪除所有比賽項目的成績嗎？此動作無法復原！")) {
+            if (confirm("⚠️ 警告：確定要刪除雲端所有比賽項目的成績嗎？此動作無法復原，所有觀眾的手機都會即時清空！")) {
                 const pwd = prompt("請再次輸入管理員密碼 (預設為 8888)：");
                 if (pwd === CONFIG.adminPassword) {
-                    db = { speed: [], ollie: [], street: [] };
-                    saveAndRender();
-                    alert("✅ 所有成績已成功清除！");
-                    adminPanel.classList.remove('open');
+                    dbRef.remove().then(() => {
+                        alert("✅ 雲端成績已全部清空！");
+                        adminPanel.classList.remove('open');
+                    });
                 } else if (pwd !== null) {
                     alert("❌ 密碼錯誤，取消清除動作。");
                 }
@@ -464,7 +504,6 @@
         });
 
         updateCategoryOptions('speed'); 
-        saveAndRender();
     </script>
 </body>
 </html>
