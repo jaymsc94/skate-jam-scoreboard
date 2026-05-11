@@ -108,6 +108,12 @@
             margin-top: 8px; cursor: pointer; transition: background-color 0.2s;
         }
 
+        .btn-clear {
+            width: 100%; padding: 14px; background: transparent; color: var(--update-color);
+            border: 1px solid var(--update-color); border-radius: 6px; font-size: 1rem; font-weight: 700;
+            margin-top: 16px; cursor: pointer; transition: background-color 0.2s;
+        }
+
         .dynamic-input { display: none; }
         .dynamic-input.active { display: block; }
 
@@ -185,12 +191,17 @@
 
                 <button type="submit" class="btn-submit" id="submit-btn">新增成績</button>
             </form>
+
+            <!-- 新增：清除資料分隔線與按鈕 -->
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border-color);">
+            <button type="button" id="clear-data-btn" class="btn-clear">🗑️ 清除所有測試成績</button>
+            
         </section>
     </div>
 
     <script>
         const CONFIG = {
-            adminPassword: "8888",
+            adminPassword: "8888", // 管理員密碼
             events: {
                 speed: { name: "速度障礙賽", unit: "秒", sortRule: 1 },
                 ollie: { name: "Highest Ollie", unit: "塊", sortRule: -1 },
@@ -298,6 +309,7 @@
 
         document.getElementById('close-admin').addEventListener('click', () => adminPanel.classList.remove('open'));
 
+        // 新增成績邏輯
         document.getElementById('score-form').addEventListener('submit', (e) => {
             e.preventDefault();
             
@@ -345,6 +357,27 @@
             document.querySelector(`.tab-btn[data-target="${eventType}"]`).click();
             document.activeElement.blur(); 
             adminPanel.classList.remove('open');
+        });
+
+        // ==========================================
+        // 新增：清除所有成績邏輯
+        // ==========================================
+        document.getElementById('clear-data-btn').addEventListener('click', () => {
+            // 彈出警告確認
+            if (confirm("⚠️ 警告：確定要刪除所有比賽項目的成績嗎？此動作無法復原！")) {
+                // 再次要求輸入密碼確認
+                const pwd = prompt("為安全起見，請再次輸入管理員密碼 (預設為 8888)：");
+                if (pwd === CONFIG.adminPassword) {
+                    // 重設資料庫為空陣列
+                    db = { speed: [], ollie: [], street: [] };
+                    // 儲存並重新渲染畫面
+                    saveAndRender();
+                    alert("✅ 所有成績已成功清除，可以開始新比賽了！");
+                    adminPanel.classList.remove('open');
+                } else if (pwd !== null) {
+                    alert("❌ 密碼錯誤，取消清除動作。");
+                }
+            }
         });
 
         saveAndRender();
