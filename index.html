@@ -9,9 +9,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
     <style>
-        /* ==========================================
-           1. 變數與基礎設定
-           ========================================== */
         :root {
             --bg-color: #f9f9f9;
             --text-main: #111111;
@@ -34,16 +31,11 @@
 
         #app { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; padding-bottom: 80px; }
 
-        /* ==========================================
-           2. 標題與選單 (Tabs)
-           ========================================== */
         header { padding: 20px 16px; text-align: center; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; }
 
-        /* 新增：實時連線狀態顯示 */
-        #connection-status { 
-            font-size: 0.75rem; color: #4CAF50; margin-top: 4px; font-weight: 600;
-        }
+        #connection-status { font-size: 0.75rem; color: #d4af37; margin-top: 4px; font-weight: 600; }
+        #connection-status.online { color: #4CAF50; }
         #connection-status.offline { color: var(--update-color); }
 
         .tabs { display: flex; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
@@ -54,9 +46,6 @@
         }
         .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
 
-        /* ==========================================
-           3. 排行榜列表 UI
-           ========================================== */
         .board-container { padding: 16px; display: none; }
         .board-container.active { display: block; }
 
@@ -72,7 +61,7 @@
             padding: 16px; margin-bottom: 12px; border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             border: 1px solid var(--border-color);
-            animation: fadeIn 0.3s ease-out; /* 新增成績時的動畫 */
+            animation: fadeIn 0.3s ease-out;
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -90,9 +79,6 @@
 
         .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; margin-bottom: 20px; }
 
-        /* ==========================================
-           4. 管理員後台
-           ========================================== */
         #admin-trigger {
             position: fixed; bottom: 20px; right: 20px;
             background: var(--accent-color); color: white;
@@ -197,3 +183,314 @@
                 </div>
 
                 <div id="input-speed" class="dynamic-input active">
+                    <div class="form-group">
+                        <label>完成時間 (秒) - 愈短愈好</label>
+                        <input type="number" step="0.01" id="score-speed" placeholder="例如: 12.50">
+                    </div>
+                </div>
+
+                <div id="input-ollie" class="dynamic-input">
+                    <div class="form-group">
+                        <label>跳躍高度 (滑板塊數) - 愈高愈好</label>
+                        <input type="number" id="score-ollie" placeholder="例如: 8">
+                    </div>
+                </div>
+
+                <div id="input-street" class="dynamic-input">
+                    <div class="form-group">
+                        <label>Best Run 分數</label>
+                        <input type="number" step="0.1" id="score-run" placeholder="例如: 85.5">
+                    </div>
+                    <div class="form-group">
+                        <label>Best Trick 分數</label>
+                        <input type="number" step="0.1" id="score-trick" placeholder="例如: 92.0">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit" id="submit-btn">新增成績</button>
+            </form>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid var(--border-color);">
+            <button type="button" id="clear-data-btn" class="btn-clear">🗑️ 清除雲端所有成績</button>
+            
+        </section>
+    </div>
+
+    <script>
+        const CONFIG = {
+            adminPassword: "8888",
+            sessionDuration: 10 * 60 * 1000,
+            events: {
+                speed: { name: "速度障礙比賽", unit: "秒", sortRule: 1, categories: ["小學男子組", "小學女子組"] },
+                ollie: { name: "豚跳鬥高比賽", unit: "塊", sortRule: -1, categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"] },
+                street: { name: "街式滑板比賽", unit: "分", sortRule: -1, weights: { run: 1.0, trick: 1.0 }, categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"] }
+            }
+        };
+
+        let localDb = { speed: [], ollie: [], street: [] };
+
+        // 升級版 UI 渲染：確保每次呼叫都會畫出所有組別
+        function renderBoard(eventId, dataArray, scoreFormatter, isHtml = false) {
+            const container = document.getElementById(eventId);
+            container.innerHTML = '';
+            const categories = CONFIG.events[eventId].categories;
+
+            categories.forEach(cat => {
+                const catData = dataArray.filter(item => item.category === cat);
+                const header = document.createElement('h3');
+                header.className = 'category-title';
+                header.textContent = cat;
+                container.appendChild(header);
+
+                if (catData.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'empty-state';
+                    empty.textContent = `尚無成績`;
+                    container.appendChild(empty);
+                } else {
+                    catData.forEach((item, index) => {
+                        const card = document.createElement('div');
+                        card.className = 'rank-card';
+                        const scoreContent = isHtml ? scoreFormatter(item) : `<div class="final-score">${scoreFormatter(item)}</div>`;
+                        card.innerHTML = `
+                            <div class="rank-num">${index + 1}</div>
+                            <div class="skater-info">
+                                <div class="skater-id">${item.id} <span class="skater-name">${item.name}</span></div>
+                            </div>
+                            <div>${scoreContent}</div>
+                        `;
+                        container.appendChild(card);
+                    });
+                }
+            });
+        }
+
+        // 第一時間強制畫出空嘅排行榜，防止白畫面！
+        renderBoard('speed', [], () => ``);
+        renderBoard('ollie', [], () => ``);
+        renderBoard('street', [], () => ``);
+
+        /**
+         * =========================================================================
+         * ⚠️ 極重要：請將下面 databaseURL 換成你喺 Database 版面 Copy 嗰條真實網址！
+         * =========================================================================
+         */
+        const firebaseConfig = {
+          apiKey: "AIzaSyB7MVS392XGq27V24VG94o26gvZpWj_xk4",
+          authDomain: "skate-jam-2026.firebaseapp.com",
+          databaseURL: "https://skate-jam-2026-default-rtdb.firebaseio.com/", // <-- 🔴 換走呢行！如果尾綴係 .app，一定要換！
+          projectId: "skate-jam-2026",
+          storageBucket: "skate-jam-2026.firebasestorage.app",
+          messagingSenderId: "1069864791525",
+          appId: "1:1069864791525:web:1a4ae110e26bedaaf7930c",
+          measurementId: "G-F0TX3VG6R2"
+        };
+        // =========================================================================
+
+        const statusEl = document.getElementById('connection-status');
+        let database, dbRef;
+
+        // 加入錯誤攔截，如果 Firebase 撞板會即刻話你知
+        try {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+            dbRef = database.ref('skate_jam_2026_scores');
+
+            // 監聽連線狀態
+            firebase.database().ref('.info/connected').on('value', function(snap) {
+                if (snap.val() === true) {
+                    statusEl.textContent = "🟢 雲端系統已連線 (即時更新中)";
+                    statusEl.className = 'online';
+                } else {
+                    statusEl.textContent = "🔴 離線狀態 (請檢查網址或網絡)";
+                    statusEl.className = 'offline';
+                }
+            });
+
+            // 監聽資料變更
+            dbRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                
+                if (data) {
+                    localDb.speed = data.speed ? Object.values(data.speed) : [];
+                    localDb.ollie = data.ollie ? Object.values(data.ollie) : [];
+                    localDb.street = data.street ? Object.values(data.street) : [];
+                } else {
+                    localDb = { speed: [], ollie: [], street: [] };
+                }
+
+                localDb.speed.sort((a, b) => (a.score - b.score) * CONFIG.events.speed.sortRule);
+                localDb.ollie.sort((a, b) => (a.score - b.score) * CONFIG.events.ollie.sortRule);
+                localDb.street.sort((a, b) => (a.total - b.total) * CONFIG.events.street.sortRule);
+
+                renderBoard('speed', localDb.speed, (d) => `${d.score} ${CONFIG.events.speed.unit}`);
+                renderBoard('ollie', localDb.ollie, (d) => `${d.score} ${CONFIG.events.ollie.unit}`);
+                renderBoard('street', localDb.street, (d) => {
+                    return `<div class="final-score">${d.total.toFixed(1)} ${CONFIG.events.street.unit}</div>
+                            <div class="score-detail">Run: ${d.run} | Trick: ${d.trick}</div>`;
+                }, true);
+            });
+
+        } catch (error) {
+            statusEl.textContent = "🔴 系統錯誤 (可能是代碼格式或防廣告攔截): " + error.message;
+            statusEl.className = 'offline';
+        }
+
+        // ==========================================
+        // UI 互動邏輯 (Tabs, Forms, Session)
+        // ==========================================
+        function updateCategoryOptions(eventType) {
+            const catSelect = document.getElementById('category-select');
+            catSelect.innerHTML = ''; 
+            CONFIG.events[eventType].categories.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
+            });
+        }
+
+        function checkExistingRecord() {
+            const eventType = document.getElementById('event-select').value;
+            const skaterId = document.getElementById('skater-id').value.trim();
+            const submitBtn = document.getElementById('submit-btn');
+            
+            if (!skaterId) return;
+            const existing = localDb[eventType].find(item => item.id === skaterId);
+            
+            if (existing) {
+                document.getElementById('skater-name').value = existing.name || '';
+                if (existing.category) document.getElementById('category-select').value = existing.category;
+                if (eventType === 'speed') document.getElementById('score-speed').value = existing.score;
+                if (eventType === 'ollie') document.getElementById('score-ollie').value = existing.score;
+                if (eventType === 'street') {
+                    document.getElementById('score-run').value = existing.run;
+                    document.getElementById('score-trick').value = existing.trick;
+                }
+                submitBtn.textContent = "更新成績 (上傳至雲端)";
+                submitBtn.style.backgroundColor = "var(--update-color)";
+            } else {
+                document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
+                submitBtn.textContent = "新增成績";
+                submitBtn.style.backgroundColor = "var(--accent-color)";
+            }
+        }
+
+        document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
+        document.getElementById('event-select').addEventListener('change', (e) => {
+            const eventType = e.target.value;
+            document.querySelectorAll('.dynamic-input').forEach(el => el.classList.remove('active'));
+            document.getElementById(`input-${eventType}`).classList.add('active');
+            updateCategoryOptions(eventType);
+            checkExistingRecord();
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.board-container').forEach(c => c.classList.remove('active'));
+                e.target.classList.add('active');
+                document.getElementById(e.target.getAttribute('data-target')).classList.add('active');
+            });
+        });
+
+        const adminPanel = document.getElementById('admin-panel');
+        document.getElementById('admin-trigger').addEventListener('click', () => {
+            const sessionExpiry = localStorage.getItem('skate_admin_expiry');
+            const now = Date.now();
+            if (sessionExpiry && now < parseInt(sessionExpiry)) {
+                localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
+                adminPanel.classList.add('open');
+            } else {
+                const pwd = prompt("請輸入管理員密碼：");
+                if (pwd === CONFIG.adminPassword) {
+                    localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
+                    adminPanel.classList.add('open');
+                } else if (pwd !== null) { alert("密碼錯誤"); }
+            }
+        });
+
+        document.getElementById('logout-admin').addEventListener('click', () => {
+            localStorage.removeItem('skate_admin_expiry');
+            adminPanel.classList.remove('open');
+            alert("已成功登出。");
+        });
+        document.getElementById('close-admin').addEventListener('click', () => adminPanel.classList.remove('open'));
+
+        // ==========================================
+        // 上傳成績到 Firebase
+        // ==========================================
+        document.getElementById('score-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            if (!database) return alert("系統未能連接雲端，無法上傳成績！");
+
+            localStorage.setItem('skate_admin_expiry', Date.now() + CONFIG.sessionDuration);
+
+            const eventType = document.getElementById('event-select').value;
+            const skaterId = document.getElementById('skater-id').value.trim();
+            const skaterName = document.getElementById('skater-name').value.trim();
+            const category = document.getElementById('category-select').value; 
+
+            if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
+
+            let newData = { id: skaterId, name: skaterName, category: category }; 
+
+            if (eventType === 'speed') {
+                const score = parseFloat(document.getElementById('score-speed').value);
+                if (isNaN(score)) return alert("請輸入有效秒數");
+                newData.score = score;
+            } else if (eventType === 'ollie') {
+                const score = parseInt(document.getElementById('score-ollie').value);
+                if (isNaN(score)) return alert("請輸入有效塊數");
+                newData.score = score;
+            } else if (eventType === 'street') {
+                const run = parseFloat(document.getElementById('score-run').value);
+                const trick = parseFloat(document.getElementById('score-trick').value);
+                if (isNaN(run) || isNaN(trick)) return alert("請輸入有效的分數");
+                newData.run = run;
+                newData.trick = trick;
+                newData.total = (run * CONFIG.events.street.weights.run) + (trick * CONFIG.events.street.weights.trick);
+            }
+
+            database.ref(`skate_jam_2026_scores/${eventType}/${skaterId}`).set(newData)
+                .then(() => {
+                    document.getElementById('skater-id').value = '';
+                    document.getElementById('skater-name').value = '';
+                    document.querySelectorAll('#admin-panel input[type="number"]').forEach(input => input.value = '');
+                    const submitBtn = document.getElementById('submit-btn');
+                    submitBtn.textContent = "新增成績";
+                    submitBtn.style.backgroundColor = "var(--accent-color)";
+                    
+                    document.querySelector(`.tab-btn[data-target="${eventType}"]`).click();
+                    document.activeElement.blur(); 
+                    adminPanel.classList.remove('open');
+                })
+                .catch((error) => {
+                    alert("上傳失敗，請檢查網絡連線: " + error.message);
+                });
+        });
+
+        // ==========================================
+        // 清除 Firebase 所有成績
+        // ==========================================
+        document.getElementById('clear-data-btn').addEventListener('click', () => {
+            if (confirm("⚠️ 警告：確定要刪除雲端所有比賽項目的成績嗎？此動作無法復原，所有觀眾的手機都會即時清空！")) {
+                const pwd = prompt("請再次輸入管理員密碼 (預設為 8888)：");
+                if (pwd === CONFIG.adminPassword) {
+                    if (dbRef) {
+                        dbRef.remove().then(() => {
+                            alert("✅ 雲端成績已全部清空！");
+                            adminPanel.classList.remove('open');
+                        });
+                    }
+                } else if (pwd !== null) {
+                    alert("❌ 密碼錯誤，取消清除動作。");
+                }
+            }
+        });
+
+        updateCategoryOptions('speed'); 
+    </script>
+</body>
+</html>
