@@ -73,8 +73,15 @@
         .skater-info { flex: 1; }
         .skater-id { font-size: 1.1rem; font-weight: 700; }
         .skater-name { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
-        .score-detail { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
         
+        /* 新增：輪數標籤樣式 */
+        .round-badge { 
+            font-size: 0.7rem; background: var(--accent-color); color: white;
+            padding: 2px 6px; border-radius: 4px; margin-left: 6px; 
+            vertical-align: middle; font-weight: 600;
+        }
+
+        .score-detail { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
         .final-score { font-size: 1.2rem; font-weight: 700; text-align: right; }
 
         .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; margin-bottom: 20px; }
@@ -125,6 +132,10 @@
 
         .dynamic-input { display: none; }
         .dynamic-input.active { display: block; }
+        
+        .judge-group { background: #f4f4f4; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #ebebeb;}
+        .judge-group label { color: var(--accent-color); font-size: 0.8rem; }
+        .score-row { display: flex; gap: 8px; }
 
     </style>
 </head>
@@ -173,6 +184,17 @@
                 </div>
 
                 <div class="form-group">
+                    <label>比賽輪數 / 階段</label>
+                    <select id="round-select" required>
+                        <option value="初賽 / 第一輪">初賽 / 第一輪</option>
+                        <option value="第二輪">第二輪</option>
+                        <option value="第三輪">第三輪</option>
+                        <option value="半決賽">半決賽</option>
+                        <option value="決賽">決賽</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>參賽者編號</label>
                     <input type="text" id="skater-id" placeholder="例如: #001" required autocomplete="off">
                 </div>
@@ -191,19 +213,33 @@
 
                 <div id="input-ollie" class="dynamic-input">
                     <div class="form-group">
-                        <label>跳躍高度 (滑板塊數) - 愈高愈好</label>
+                        <label>最終跨越高度 (滑板塊數)</label>
                         <input type="number" id="score-ollie" placeholder="例如: 8">
                     </div>
                 </div>
 
                 <div id="input-street" class="dynamic-input">
-                    <div class="form-group">
-                        <label>Best Run 分數</label>
-                        <input type="number" step="0.1" id="score-run" placeholder="例如: 85.5">
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">請輸入三位裁判評分 (系統將自動相加總和)</p>
+                    <div class="judge-group">
+                        <label>裁判 A 分數</label>
+                        <div class="score-row">
+                            <input type="number" step="0.1" id="j1-run" placeholder="Run 分數">
+                            <input type="number" step="0.1" id="j1-trick" placeholder="Trick 分數">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Best Trick 分數</label>
-                        <input type="number" step="0.1" id="score-trick" placeholder="例如: 92.0">
+                    <div class="judge-group">
+                        <label>裁判 B 分數</label>
+                        <div class="score-row">
+                            <input type="number" step="0.1" id="j2-run" placeholder="Run 分數">
+                            <input type="number" step="0.1" id="j2-trick" placeholder="Trick 分數">
+                        </div>
+                    </div>
+                    <div class="judge-group">
+                        <label>裁判 C 分數</label>
+                        <div class="score-row">
+                            <input type="number" step="0.1" id="j3-run" placeholder="Run 分數">
+                            <input type="number" step="0.1" id="j3-trick" placeholder="Trick 分數">
+                        </div>
                     </div>
                 </div>
 
@@ -252,10 +288,14 @@
                         var card = document.createElement('div');
                         card.className = 'rank-card';
                         var scoreContent = isHtml ? scoreFormatter(item) : '<div class="final-score">' + scoreFormatter(item) + '</div>';
+                        
+                        // 動態生成輪數標籤
+                        var roundHtml = item.round ? '<span class="round-badge">' + item.round + '</span>' : '';
+
                         card.innerHTML = 
                             '<div class="rank-num">' + (index + 1) + '</div>' +
                             '<div class="skater-info">' +
-                                '<div class="skater-id">' + item.id + ' <span class="skater-name">' + item.name + '</span></div>' +
+                                '<div class="skater-id">' + item.id + ' <span class="skater-name">' + item.name + '</span>' + roundHtml + '</div>' +
                             '</div>' +
                             '<div>' + scoreContent + '</div>';
                         container.appendChild(card);
@@ -268,7 +308,7 @@
         renderBoard('ollie', [], function() { return ""; });
         renderBoard('street', [], function() { return ""; });
 
-        // 你專屬的 Firebase Config
+        // Firebase Config
         var firebaseConfig = {
           apiKey: "AIzaSyB7MVS392XGq27V24VG94o26gvZpWj_xk4",
           authDomain: "skate-jam-2026.firebaseapp.com",
@@ -322,7 +362,7 @@
                 renderBoard('ollie', localDb.ollie, function(d) { return d.score + ' ' + CONFIG.events.ollie.unit; });
                 renderBoard('street', localDb.street, function(d) {
                     return '<div class="final-score">' + d.total.toFixed(1) + ' ' + CONFIG.events.street.unit + '</div>' +
-                           '<div class="score-detail">Run: ' + d.run + ' | Trick: ' + d.trick + '</div>';
+                           '<div class="score-detail">Total Run: ' + d.run.toFixed(1) + ' | Total Trick: ' + d.trick.toFixed(1) + '</div>';
                 }, true);
             });
 
@@ -331,9 +371,6 @@
             statusEl.className = 'offline';
         }
 
-        // ==========================================
-        // UI 互動邏輯 (按鈕、選單等)
-        // ==========================================
         function updateCategoryOptions(eventType) {
             var catSelect = document.getElementById('category-select');
             catSelect.innerHTML = ''; 
@@ -363,17 +400,31 @@
             if (existing) {
                 document.getElementById('skater-name').value = existing.name || '';
                 if (existing.category) document.getElementById('category-select').value = existing.category;
+                
+                // 自動載入舊嘅輪數
+                if (existing.round) {
+                    document.getElementById('round-select').value = existing.round;
+                }
+
                 if (eventType === 'speed') document.getElementById('score-speed').value = existing.score;
                 if (eventType === 'ollie') document.getElementById('score-ollie').value = existing.score;
                 if (eventType === 'street') {
-                    document.getElementById('score-run').value = existing.run;
-                    document.getElementById('score-trick').value = existing.trick;
+                    if(existing.details) {
+                        document.getElementById('j1-run').value = existing.details.j1r !== undefined ? existing.details.j1r : '';
+                        document.getElementById('j1-trick').value = existing.details.j1t !== undefined ? existing.details.j1t : '';
+                        document.getElementById('j2-run').value = existing.details.j2r !== undefined ? existing.details.j2r : '';
+                        document.getElementById('j2-trick').value = existing.details.j2t !== undefined ? existing.details.j2t : '';
+                        document.getElementById('j3-run').value = existing.details.j3r !== undefined ? existing.details.j3r : '';
+                        document.getElementById('j3-trick').value = existing.details.j3t !== undefined ? existing.details.j3t : '';
+                    }
                 }
                 submitBtn.textContent = "更新成績 (上傳至雲端)";
                 submitBtn.style.backgroundColor = "var(--update-color)";
             } else {
                 var inputs = document.querySelectorAll('#admin-panel input[type="number"]');
                 for(var j=0; j<inputs.length; j++) inputs[j].value = '';
+                // 回復預設輪數
+                document.getElementById('round-select').selectedIndex = 0;
                 submitBtn.textContent = "新增成績";
                 submitBtn.style.backgroundColor = "var(--accent-color)";
             }
@@ -413,7 +464,7 @@
                 localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
                 adminPanel.classList.add('open');
             } else {
-                var pwd = prompt("請輸入管理員密碼 (測試請輸入8888)：");
+                var pwd = prompt("請輸入管理員密碼 (預設：8888)：");
                 if (pwd === CONFIG.adminPassword) {
                     localStorage.setItem('skate_admin_expiry', new Date().getTime() + CONFIG.sessionDuration);
                     adminPanel.classList.add('open');
@@ -442,10 +493,11 @@
             var skaterId = document.getElementById('skater-id').value.trim();
             var skaterName = document.getElementById('skater-name').value.trim();
             var category = document.getElementById('category-select').value; 
+            var round = document.getElementById('round-select').value;
 
             if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
 
-            var newData = { id: skaterId, name: skaterName, category: category }; 
+            var newData = { id: skaterId, name: skaterName, category: category, round: round }; 
 
             if (eventType === 'speed') {
                 var score = parseFloat(document.getElementById('score-speed').value);
@@ -456,12 +508,20 @@
                 if (isNaN(score)) return alert("請輸入有效塊數");
                 newData.score = score;
             } else if (eventType === 'street') {
-                var run = parseFloat(document.getElementById('score-run').value);
-                var trick = parseFloat(document.getElementById('score-trick').value);
-                if (isNaN(run) || isNaN(trick)) return alert("請輸入有效的分數");
-                newData.run = run;
-                newData.trick = trick;
-                newData.total = (run * CONFIG.events.street.weights.run) + (trick * CONFIG.events.street.weights.trick);
+                var j1r = parseFloat(document.getElementById('j1-run').value) || 0;
+                var j1t = parseFloat(document.getElementById('j1-trick').value) || 0;
+                var j2r = parseFloat(document.getElementById('j2-run').value) || 0;
+                var j2t = parseFloat(document.getElementById('j2-trick').value) || 0;
+                var j3r = parseFloat(document.getElementById('j3-run').value) || 0;
+                var j3t = parseFloat(document.getElementById('j3-trick').value) || 0;
+                
+                var totalRun = j1r + j2r + j3r;
+                var totalTrick = j1t + j2t + j3t;
+
+                newData.run = totalRun;
+                newData.trick = totalTrick;
+                newData.details = { j1r: j1r, j1t: j1t, j2r: j2r, j2t: j2t, j3r: j3r, j3t: j3t }; 
+                newData.total = (totalRun * CONFIG.events.street.weights.run) + (totalTrick * CONFIG.events.street.weights.trick);
             }
 
             database.ref('skate_jam_2026_scores/' + eventType + '/' + skaterId).set(newData)
