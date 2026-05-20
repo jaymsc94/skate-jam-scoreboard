@@ -270,7 +270,7 @@
         }
 
         // ==========================================
-        // Firebase Config
+        // Firebase Config (完全使用你的公司帳號設定)
         // ==========================================
         var firebaseConfig = {
           apiKey: "AIzaSyAxY9yLSVqxn90fv4d78cLLxtCjmcty-yc",
@@ -305,7 +305,6 @@
             dbRef.on('value', function(snapshot) {
                 var data = snapshot.val() || {};
                 
-                // ES5 相容 Object.values 寫法
                 localDb.speed = [];
                 for(var k1 in data.speed) { if(data.speed.hasOwnProperty(k1)) localDb.speed.push(data.speed[k1]); }
                 
@@ -330,7 +329,7 @@
             var container = document.getElementById('speed');
             if(!speedData || speedData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
 
-            // 尋找存在的所有輪次 (ES5 相容)
+            // 尋找存在的所有輪次 (防彈寫法)
             var roundsObj = {};
             for(var i=0; i<speedData.length; i++) {
                 if(speedData[i].scores) {
@@ -351,7 +350,6 @@
 
             var currentRound = activeSubTabs.speed;
 
-            // 繪製子分頁按鈕
             var html = '<div class="sub-tabs">';
             for(var k=0; k<roundsArr.length; k++) {
                 var rName = roundsArr[k];
@@ -360,7 +358,6 @@
             }
             html += '</div>';
 
-            // 繪製各組別成績
             CONFIG.events.speed.categories.forEach(function(cat) {
                 var catData = [];
                 for(var m=0; m<speedData.length; m++) {
@@ -484,7 +481,6 @@
                         var p = catData[k];
                         var detailsStr = '';
                         if(p.scores) {
-                            // Extract keys, sort them, then build string
                             var rounds = [];
                             for(var rnd in p.scores) { if(p.scores.hasOwnProperty(rnd)) rounds.push(rnd); }
                             rounds.sort();
@@ -517,10 +513,7 @@
             catSelect.innerHTML = ''; 
             var cats = CONFIG.events[eventType].categories;
             for(var i=0; i<cats.length; i++) {
-                var opt = document.createElement('option'); 
-                opt.value = cats[i]; 
-                opt.textContent = cats[i]; 
-                catSelect.appendChild(opt);
+                var opt = document.createElement('option'); opt.value = cats[i]; opt.textContent = cats[i]; catSelect.appendChild(opt);
             }
         }
 
@@ -543,6 +536,7 @@
                 if (eventType === 'ollie') {
                     document.getElementById('score-ollie').value = existing.maxBoards || '';
                     submitBtn.textContent = "更新成績";
+                    submitBtn.style.backgroundColor = "var(--update-color)";
                 } else if (existing.scores && existing.scores[currentRound]) {
                     var rData = existing.scores[currentRound];
                     if (eventType === 'speed') document.getElementById('score-speed').value = rData.score;
