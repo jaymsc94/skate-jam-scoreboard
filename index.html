@@ -49,14 +49,16 @@
         .board-container { padding: 16px; display: none; }
         .board-container.active { display: block; }
 
-        /* 子分頁按鈕 (輪次 / 板數) */
-        .sub-tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 6px; }
+        /* 子分頁按鈕 (支援橫向滑動，最多20塊板都順暢) */
+        .sub-tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; }
         .sub-tab-btn {
             padding: 8px 16px; border: 1px solid var(--accent-color); background: transparent; 
             color: var(--accent-color); border-radius: 20px; font-size: 0.85rem; font-weight: 700;
             cursor: pointer; white-space: nowrap; transition: all 0.2s;
         }
         .sub-tab-btn.active { background: var(--accent-color); color: white; }
+        .sub-tabs::-webkit-scrollbar { height: 4px; }
+        .sub-tabs::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
 
         .category-title {
             font-size: 1.1rem; font-weight: 800; color: var(--accent-color);
@@ -80,7 +82,7 @@
         .skater-id { font-size: 1.1rem; font-weight: 700; }
         .skater-name { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
         
-        .score-detail { font-size: 0.8rem; color: #555555; margin-top: 4px; font-weight: 500; background: #f2f2f2; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+        .score-detail { font-size: 0.8rem; color: #555555; margin-top: 4px; font-weight: 500; background: #f2f2f2; padding: 4px 8px; border-radius: 4px; display: inline-block; line-height: 1.4; }
         .final-score { font-size: 1.2rem; font-weight: 700; text-align: right; }
         .pass-status { font-size: 1.1rem; font-weight: 800; color: var(--pass-color); }
         .pass-count { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; background: #eee; padding: 4px 10px; border-radius: 4px; display: inline-block; }
@@ -104,13 +106,15 @@
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); }
         input, select { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; background: #fff; }
+        
+        .run-group { display: flex; gap: 8px; }
+        
         .btn-submit { width: 100%; padding: 14px; background: var(--accent-color); color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: 700; margin-top: 8px; cursor: pointer; }
         .btn-clear { width: 100%; padding: 14px; background: transparent; color: var(--update-color); border: 1px solid var(--update-color); border-radius: 6px; font-size: 1rem; font-weight: 700; margin-top: 16px; cursor: pointer; }
         .dynamic-input { display: none; }
         .dynamic-input.active { display: block; }
         .judge-group { background: #f4f4f4; padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #ebebeb;}
         .judge-group label { color: var(--accent-color); font-size: 0.8rem; }
-        .score-row { display: flex; gap: 8px; }
     </style>
 </head>
 <body>
@@ -155,13 +159,10 @@
                 </div>
 
                 <div class="form-group" id="round-group">
-                    <label>比賽輪數</label>
+                    <label>比賽輪數 (共兩輪)</label>
                     <select id="round-select">
                         <option value="第一輪">第一輪</option>
                         <option value="第二輪">第二輪</option>
-                        <option value="第三輪">第三輪</option>
-                        <option value="第四輪">第四輪</option>
-                        <option value="第五輪">第五輪</option>
                     </select>
                 </div>
 
@@ -176,41 +177,39 @@
                 </div>
 
                 <div id="input-speed" class="dynamic-input active">
-                    <div class="form-group">
-                        <label>完成時間 (秒) - 愈短愈好</label>
-                        <input type="number" step="0.01" id="score-speed" placeholder="例如: 12.50">
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">系統會自動選取兩個 Run 中時間最短的作為該輪成績</p>
+                    <div class="run-group">
+                        <div class="form-group" style="flex:1;">
+                            <label>Run 1 (秒)</label>
+                            <input type="number" step="0.01" id="score-speed-1" placeholder="例如: 12.50">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label>Run 2 (秒)</label>
+                            <input type="number" step="0.01" id="score-speed-2" placeholder="例如: 12.00">
+                        </div>
                     </div>
                 </div>
 
                 <div id="input-ollie" class="dynamic-input">
                     <div class="form-group">
                         <label>最終成功挑戰總塊數</label>
-                        <input type="number" id="score-ollie" placeholder="例如跳過4塊板就填4">
+                        <input type="number" id="score-ollie" placeholder="預計最多填 20" max="30">
                     </div>
                 </div>
 
                 <div id="input-street" class="dynamic-input">
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">請輸入三位裁判評分 (系統將自動相加總和)</p>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">請輸入三位裁判之評分 (系統將自動相加總和)</p>
                     <div class="judge-group">
-                        <label>裁判 A 分數</label>
-                        <div class="score-row">
-                            <input type="number" step="0.1" id="j1-run" placeholder="Run 分數">
-                            <input type="number" step="0.1" id="j1-trick" placeholder="Trick 分數">
-                        </div>
+                        <label>裁判 Chun Chai (總分)</label>
+                        <input type="number" step="0.1" id="j1-total" placeholder="分數">
                     </div>
                     <div class="judge-group">
-                        <label>裁判 B 分數</label>
-                        <div class="score-row">
-                            <input type="number" step="0.1" id="j2-run" placeholder="Run 分數">
-                            <input type="number" step="0.1" id="j2-trick" placeholder="Trick 分數">
-                        </div>
+                        <label>裁判 Lung Chai (總分)</label>
+                        <input type="number" step="0.1" id="j2-total" placeholder="分數">
                     </div>
                     <div class="judge-group">
-                        <label>裁判 C 分數</label>
-                        <div class="score-row">
-                            <input type="number" step="0.1" id="j3-run" placeholder="Run 分數">
-                            <input type="number" step="0.1" id="j3-trick" placeholder="Trick 分數">
-                        </div>
+                        <label>裁判 Johnnie (總分)</label>
+                        <input type="number" step="0.1" id="j3-total" placeholder="分數">
                     </div>
                 </div>
 
@@ -234,7 +233,7 @@
         var localDb = { speed: [], ollie: [], street: [] };
         
         // 紀錄目前選擇的子分頁狀態
-        var activeSubTabs = { speed: '第一輪', ollie: 1 };
+        var activeSubTabs = { speed: '第一輪', ollie: 1, street: '第一輪' };
 
         function switchTab(target) {
             var btns = document.querySelectorAll('.tab-btn');
@@ -246,11 +245,11 @@
             document.getElementById(target).classList.add('active');
         }
 
-        // 切換子分頁 (輪數或板數)
         function setSubTab(event, tabId) {
             activeSubTabs[event] = tabId;
             if(event === 'speed') renderSpeed(localDb.speed);
             if(event === 'ollie') renderOllie(localDb.ollie);
+            if(event === 'street') renderStreet(localDb.street);
         }
 
         function updateInputs() {
@@ -323,13 +322,12 @@
         }
 
         // ==========================================
-        // 渲染：速度挑戰 (每輪一頁)
+        // 渲染：速度挑戰 (每輪一頁，顯示 Run1 & Run2)
         // ==========================================
         function renderSpeed(speedData) {
             var container = document.getElementById('speed');
             if(!speedData || speedData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
 
-            // 尋找存在的所有輪次 (防彈寫法)
             var roundsObj = {};
             for(var i=0; i<speedData.length; i++) {
                 if(speedData[i].scores) {
@@ -374,14 +372,19 @@
                     catData.sort(function(a,b) { return a.scores[currentRound].score - b.scores[currentRound].score; });
                     for(var n=0; n<catData.length; n++) {
                         var p = catData[n];
+                        var sData = p.scores[currentRound];
+                        var strR1 = (sData.run1 && sData.run1 !== 9999) ? sData.run1.toFixed(2) + '秒' : '--';
+                        var strR2 = (sData.run2 && sData.run2 !== 9999) ? sData.run2.toFixed(2) + '秒' : '--';
+
                         html += '<div class="rank-card">' +
                                     '<div class="card-main">' +
                                         '<div class="skater-info">' +
                                             '<div class="rank-num">' + (n + 1) + '</div>' +
                                             '<div class="skater-id">' + p.id + ' <span class="skater-name">' + p.name + '</span></div>' +
                                         '</div>' +
-                                        '<div class="final-score">' + p.scores[currentRound].score.toFixed(2) + ' <span>秒</span></div>' +
+                                        '<div class="final-score">' + sData.score.toFixed(2) + ' <span>秒</span></div>' +
                                     '</div>' +
+                                    '<div class="score-detail">Run 1: ' + strR1 + ' &nbsp;|&nbsp; Run 2: ' + strR2 + '</div>' +
                                 '</div>';
                     }
                 }
@@ -390,7 +393,7 @@
         }
 
         // ==========================================
-        // 渲染：豚跳鬥高 (每塊過關人數一頁)
+        // 渲染：豚跳鬥高 (每塊板一頁，最多預計20+)
         // ==========================================
         function renderOllie(ollieData) {
             var container = document.getElementById('ollie');
@@ -447,57 +450,72 @@
         }
 
         // ==========================================
-        // 渲染：街式滑板
+        // 渲染：街式滑板 (每輪一頁，顯示3位評判)
         // ==========================================
         function renderStreet(streetData) {
             var container = document.getElementById('street');
             if(!streetData || streetData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
 
-            var html = '';
+            var roundsObj = {};
+            for(var i=0; i<streetData.length; i++) {
+                if(streetData[i].scores) {
+                    for(var r in streetData[i].scores) {
+                        if(streetData[i].scores.hasOwnProperty(r)) roundsObj[r] = true;
+                    }
+                }
+            }
+            var roundsArr = [];
+            for(var key in roundsObj) { if(roundsObj.hasOwnProperty(key)) roundsArr.push(key); }
+            roundsArr.sort();
+            
+            if(roundsArr.length === 0) roundsArr = ['第一輪'];
+            
+            var currentRoundExists = false;
+            for(var j=0; j<roundsArr.length; j++) { if(roundsArr[j] === activeSubTabs.street) currentRoundExists = true; }
+            if(!currentRoundExists) activeSubTabs.street = roundsArr[0];
+
+            var currentRound = activeSubTabs.street;
+
+            var html = '<div class="sub-tabs">';
+            for(var k=0; k<roundsArr.length; k++) {
+                var rName = roundsArr[k];
+                var activeClass = (rName === currentRound) ? 'active' : '';
+                html += '<button class="sub-tab-btn ' + activeClass + '" onclick="setSubTab(\'street\', \'' + rName + '\')">' + rName + '</button>';
+            }
+            html += '</div>';
+
             CONFIG.events.street.categories.forEach(function(cat) {
                 var catData = [];
-                for(var i=0; i<streetData.length; i++) {
-                    if(streetData[i].category === cat) catData.push(streetData[i]);
+                for(var m=0; m<streetData.length; m++) {
+                    if(streetData[m].category === cat && streetData[m].scores && streetData[m].scores[currentRound]) {
+                        catData.push(streetData[m]);
+                    }
                 }
                 
                 html += '<h3 class="category-title">' + cat + '</h3>';
 
                 if(catData.length === 0) {
-                    html += '<div class="empty-state">尚無成績</div>';
+                    html += '<div class="empty-state">此輪尚無成績</div>';
                 } else {
-                    for(var j=0; j<catData.length; j++) {
-                        catData[j].bestTotal = -1;
-                        if(catData[j].scores) {
-                            for(var r in catData[j].scores) {
-                                if(catData[j].scores.hasOwnProperty(r) && catData[j].scores[r].total > catData[j].bestTotal) {
-                                    catData[j].bestTotal = catData[j].scores[r].total;
-                                }
-                            }
-                        }
-                    }
-                    catData.sort(function(a,b) { return b.bestTotal - a.bestTotal; });
+                    catData.sort(function(a,b) { return b.scores[currentRound].total - a.scores[currentRound].total; });
 
-                    for(var k=0; k<catData.length; k++) {
-                        var p = catData[k];
-                        var detailsStr = '';
-                        if(p.scores) {
-                            var rounds = [];
-                            for(var rnd in p.scores) { if(p.scores.hasOwnProperty(rnd)) rounds.push(rnd); }
-                            rounds.sort();
-                            for(var n=0; n<rounds.length; n++) {
-                                var rn = rounds[n];
-                                if (detailsStr !== '') detailsStr += '<br>';
-                                detailsStr += rn + ': Run:' + p.scores[rn].run.toFixed(1) + ' Trick:' + p.scores[rn].trick.toFixed(1) + ' (總:' + p.scores[rn].total.toFixed(1) + ')';
-                            }
-                        }
+                    for(var n=0; n<catData.length; n++) {
+                        var p = catData[n];
+                        var sData = p.scores[currentRound];
+                        var d = sData.details || {};
+                        var j1 = d.j1 !== undefined ? d.j1.toFixed(1) : '0.0';
+                        var j2 = d.j2 !== undefined ? d.j2.toFixed(1) : '0.0';
+                        var j3 = d.j3 !== undefined ? d.j3.toFixed(1) : '0.0';
+                        
+                        var detailsStr = 'Chun Chai: ' + j1 + ' &nbsp;|&nbsp; Lung Chai: ' + j2 + ' &nbsp;|&nbsp; Johnnie: ' + j3;
 
                         html += '<div class="rank-card">' +
                                     '<div class="card-main">' +
                                         '<div class="skater-info">' +
-                                            '<div class="rank-num">' + (k + 1) + '</div>' +
+                                            '<div class="rank-num">' + (n + 1) + '</div>' +
                                             '<div class="skater-id">' + p.id + ' <span class="skater-name">' + p.name + '</span></div>' +
                                         '</div>' +
-                                        '<div class="final-score">' + p.bestTotal.toFixed(1) + ' <span>分</span></div>' +
+                                        '<div class="final-score">' + sData.total.toFixed(1) + ' <span>分</span></div>' +
                                     '</div>' +
                                     '<div class="score-detail">' + detailsStr + '</div>' +
                                 '</div>';
@@ -539,14 +557,13 @@
                     submitBtn.style.backgroundColor = "var(--update-color)";
                 } else if (existing.scores && existing.scores[currentRound]) {
                     var rData = existing.scores[currentRound];
-                    if (eventType === 'speed') document.getElementById('score-speed').value = rData.score;
-                    if (eventType === 'street' && rData.details) {
-                        document.getElementById('j1-run').value = rData.details.j1r || '';
-                        document.getElementById('j1-trick').value = rData.details.j1t || '';
-                        document.getElementById('j2-run').value = rData.details.j2r || '';
-                        document.getElementById('j2-trick').value = rData.details.j2t || '';
-                        document.getElementById('j3-run').value = rData.details.j3r || '';
-                        document.getElementById('j3-trick').value = rData.details.j3t || '';
+                    if (eventType === 'speed') {
+                        document.getElementById('score-speed-1').value = (rData.run1 && rData.run1 !== 9999) ? rData.run1 : '';
+                        document.getElementById('score-speed-2').value = (rData.run2 && rData.run2 !== 9999) ? rData.run2 : '';
+                    } else if (eventType === 'street' && rData.details) {
+                        document.getElementById('j1-total').value = rData.details.j1 !== undefined ? rData.details.j1 : '';
+                        document.getElementById('j2-total').value = rData.details.j2 !== undefined ? rData.details.j2 : '';
+                        document.getElementById('j3-total').value = rData.details.j3 !== undefined ? rData.details.j3 : '';
                     }
                     submitBtn.textContent = "更新此輪成績";
                     submitBtn.style.backgroundColor = "var(--update-color)";
@@ -593,20 +610,21 @@
                     
                     var roundData = {};
                     if(eventType === 'speed') {
-                        roundData.score = parseFloat(document.getElementById('score-speed').value) || 0;
+                        var s1 = parseFloat(document.getElementById('score-speed-1').value);
+                        var s2 = parseFloat(document.getElementById('score-speed-2').value);
+                        if(isNaN(s1)) s1 = 9999;
+                        if(isNaN(s2)) s2 = 9999;
+                        
+                        roundData.run1 = s1;
+                        roundData.run2 = s2;
+                        roundData.score = Math.min(s1, s2);
+                        if(roundData.score === 9999) roundData.score = 0; // 如果都無填防錯
                     } else if(eventType === 'street') {
-                        var j1r = parseFloat(document.getElementById('j1-run').value) || 0;
-                        var j1t = parseFloat(document.getElementById('j1-trick').value) || 0;
-                        var j2r = parseFloat(document.getElementById('j2-run').value) || 0;
-                        var j2t = parseFloat(document.getElementById('j2-trick').value) || 0;
-                        var j3r = parseFloat(document.getElementById('j3-run').value) || 0;
-                        var j3t = parseFloat(document.getElementById('j3-trick').value) || 0;
-                        var totalRun = j1r + j2r + j3r; 
-                        var totalTrick = j1t + j2t + j3t;
-                        roundData.run = totalRun; 
-                        roundData.trick = totalTrick;
-                        roundData.details = { j1r: j1r, j1t: j1t, j2r: j2r, j2t: j2t, j3r: j3r, j3t: j3t };
-                        roundData.total = totalRun + totalTrick;
+                        var j1 = parseFloat(document.getElementById('j1-total').value) || 0;
+                        var j2 = parseFloat(document.getElementById('j2-total').value) || 0;
+                        var j3 = parseFloat(document.getElementById('j3-total').value) || 0;
+                        roundData.details = { j1: j1, j2: j2, j3: j3 };
+                        roundData.total = j1 + j2 + j3;
                     }
                     
                     if(!skaterObj.scores) skaterObj.scores = {};
