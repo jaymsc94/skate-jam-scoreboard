@@ -369,4 +369,285 @@
                     }
                 }
                 
-                html += '<h3 class
+                html += '<h3 class="category-title">' + cat + '</h3>';
+                
+                if(catData.length === 0) {
+                    html += '<div class="empty-state">此輪尚無成績</div>';
+                } else {
+                    catData.sort(function(a,b) { return a.scores[currentRound].score - b.scores[currentRound].score; });
+                    for(var n=0; n<catData.length; n++) {
+                        var p = catData[n];
+                        html += '<div class="rank-card">' +
+                                    '<div class="card-main">' +
+                                        '<div class="skater-info">' +
+                                            '<div class="rank-num">' + (n + 1) + '</div>' +
+                                            '<div class="skater-id">' + p.id + ' <span class="skater-name">' + p.name + '</span></div>' +
+                                        '</div>' +
+                                        '<div class="final-score">' + p.scores[currentRound].score.toFixed(2) + ' <span>秒</span></div>' +
+                                    '</div>' +
+                                '</div>';
+                    }
+                }
+            });
+            container.innerHTML = html;
+        }
+
+        // ==========================================
+        // 渲染：豚跳鬥高 (每塊過關人數一頁)
+        // ==========================================
+        function renderOllie(ollieData) {
+            var container = document.getElementById('ollie');
+            if(!ollieData || ollieData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
+
+            var overallMax = 0;
+            for(var i=0; i<ollieData.length; i++) {
+                var m = parseInt(ollieData[i].maxBoards) || 0;
+                if(m > overallMax) overallMax = m;
+            }
+            if(overallMax === 0) overallMax = 1;
+            if(activeSubTabs.ollie > overallMax) activeSubTabs.ollie = overallMax;
+
+            var currentBoard = activeSubTabs.ollie;
+
+            var html = '<div class="sub-tabs">';
+            for(var j=1; j<=overallMax; j++) {
+                var activeClass = (j === currentBoard) ? 'active' : '';
+                html += '<button class="sub-tab-btn ' + activeClass + '" onclick="setSubTab(\'ollie\', ' + j + ')">第 ' + j + ' 塊</button>';
+            }
+            html += '</div>';
+
+            CONFIG.events.ollie.categories.forEach(function(cat) {
+                var catData = [];
+                for(var k=0; k<ollieData.length; k++) {
+                    var maxB = parseInt(ollieData[k].maxBoards) || 0;
+                    if(ollieData[k].category === cat && maxB >= currentBoard) {
+                        catData.push(ollieData[k]);
+                    }
+                }
+                
+                html += '<h3 class="category-title">' + cat + '</h3>';
+                
+                if(catData.length === 0) {
+                    html += '<div class="empty-state">此高度尚無選手過關</div>';
+                } else {
+                    html += '<div class="pass-count">共 ' + catData.length + ' 人成功跨越此高度</div>';
+                    catData.sort(function(a,b) { return (parseInt(b.maxBoards)||0) - (parseInt(a.maxBoards)||0); });
+                    
+                    for(var m=0; m<catData.length; m++) {
+                        var p = catData[m];
+                        html += '<div class="rank-card">' +
+                                    '<div class="card-main">' +
+                                        '<div class="skater-info">' +
+                                            '<div class="skater-id">' + p.id + ' <span class="skater-name">' + p.name + '</span></div>' +
+                                        '</div>' +
+                                        '<div class="pass-status">✅ 過關</div>' +
+                                    '</div>' +
+                                '</div>';
+                    }
+                }
+            });
+            container.innerHTML = html;
+        }
+
+        // ==========================================
+        // 渲染：街式滑板
+        // ==========================================
+        function renderStreet(streetData) {
+            var container = document.getElementById('street');
+            if(!streetData || streetData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
+
+            var html = '';
+            CONFIG.events.street.categories.forEach(function(cat) {
+                var catData = [];
+                for(var i=0; i<streetData.length; i++) {
+                    if(streetData[i].category === cat) catData.push(streetData[i]);
+                }
+                
+                html += '<h3 class="category-title">' + cat + '</h3>';
+
+                if(catData.length === 0) {
+                    html += '<div class="empty-state">尚無成績</div>';
+                } else {
+                    for(var j=0; j<catData.length; j++) {
+                        catData[j].bestTotal = -1;
+                        if(catData[j].scores) {
+                            for(var r in catData[j].scores) {
+                                if(catData[j].scores.hasOwnProperty(r) && catData[j].scores[r].total > catData[j].bestTotal) {
+                                    catData[j].bestTotal = catData[j].scores[r].total;
+                                }
+                            }
+                        }
+                    }
+                    catData.sort(function(a,b) { return b.bestTotal - a.bestTotal; });
+
+                    for(var k=0; k<catData.length; k++) {
+                        var p = catData[k];
+                        var detailsStr = '';
+                        if(p.scores) {
+                            // Extract keys, sort them, then build string
+                            var rounds = [];
+                            for(var rnd in p.scores) { if(p.scores.hasOwnProperty(rnd)) rounds.push(rnd); }
+                            rounds.sort();
+                            for(var n=0; n<rounds.length; n++) {
+                                var rn = rounds[n];
+                                if (detailsStr !== '') detailsStr += '<br>';
+                                detailsStr += rn + ': Run:' + p.scores[rn].run.toFixed(1) + ' Trick:' + p.scores[rn].trick.toFixed(1) + ' (總:' + p.scores[rn].total.toFixed(1) + ')';
+                            }
+                        }
+
+                        html += '<div class="rank-card">' +
+                                    '<div class="card-main">' +
+                                        '<div class="skater-info">' +
+                                            '<div class="rank-num">' + (k + 1) + '</div>' +
+                                            '<div class="skater-id">' + p.id + ' <span class="skater-name">' + p.name + '</span></div>' +
+                                        '</div>' +
+                                        '<div class="final-score">' + p.bestTotal.toFixed(1) + ' <span>分</span></div>' +
+                                    '</div>' +
+                                    '<div class="score-detail">' + detailsStr + '</div>' +
+                                '</div>';
+                    }
+                }
+            });
+            container.innerHTML = html;
+        }
+
+        function updateCategoryOptions(eventType) {
+            var catSelect = document.getElementById('category-select');
+            if(!catSelect) return;
+            catSelect.innerHTML = ''; 
+            var cats = CONFIG.events[eventType].categories;
+            for(var i=0; i<cats.length; i++) {
+                var opt = document.createElement('option'); 
+                opt.value = cats[i]; 
+                opt.textContent = cats[i]; 
+                catSelect.appendChild(opt);
+            }
+        }
+
+        function checkExistingRecord() {
+            var eventType = document.getElementById('event-select').value;
+            var skaterId = document.getElementById('skater-id').value.trim();
+            var currentRound = document.getElementById('round-select').value;
+            var submitBtn = document.getElementById('submit-btn');
+            if (!skaterId) return;
+            
+            var existing = null;
+            for (var i = 0; i < localDb[eventType].length; i++) {
+                if (localDb[eventType][i].id === skaterId) { existing = localDb[eventType][i]; break; }
+            }
+            
+            if (existing) {
+                document.getElementById('skater-name').value = existing.name || '';
+                if (existing.category) document.getElementById('category-select').value = existing.category;
+                
+                if (eventType === 'ollie') {
+                    document.getElementById('score-ollie').value = existing.maxBoards || '';
+                    submitBtn.textContent = "更新成績";
+                } else if (existing.scores && existing.scores[currentRound]) {
+                    var rData = existing.scores[currentRound];
+                    if (eventType === 'speed') document.getElementById('score-speed').value = rData.score;
+                    if (eventType === 'street' && rData.details) {
+                        document.getElementById('j1-run').value = rData.details.j1r || '';
+                        document.getElementById('j1-trick').value = rData.details.j1t || '';
+                        document.getElementById('j2-run').value = rData.details.j2r || '';
+                        document.getElementById('j2-trick').value = rData.details.j2t || '';
+                        document.getElementById('j3-run').value = rData.details.j3r || '';
+                        document.getElementById('j3-trick').value = rData.details.j3t || '';
+                    }
+                    submitBtn.textContent = "更新此輪成績";
+                    submitBtn.style.backgroundColor = "var(--update-color)";
+                } else {
+                    var numInputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                    for (var k = 0; k < numInputs.length; k++) numInputs[k].value = '';
+                    submitBtn.textContent = "新增此輪成績";
+                    submitBtn.style.backgroundColor = "var(--accent-color)";
+                }
+            } else {
+                var allInputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                for (var m = 0; m < allInputs.length; m++) allInputs[m].value = '';
+                submitBtn.textContent = "新增成績";
+                submitBtn.style.backgroundColor = "var(--accent-color)";
+            }
+        }
+
+        document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
+        document.getElementById('round-select').addEventListener('change', checkExistingRecord);
+
+        document.getElementById('score-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!database) return alert("系統未能連接雲端！");
+
+            var eventType = document.getElementById('event-select').value;
+            var skaterId = document.getElementById('skater-id').value.trim().toUpperCase();
+            var skaterName = document.getElementById('skater-name').value.trim();
+            var category = document.getElementById('category-select').value; 
+            var round = document.getElementById('round-select').value;
+
+            if (eventType === 'ollie') {
+                var maxBoards = parseInt(document.getElementById('score-ollie').value) || 0;
+                database.ref('skate_jam_2026_scores/ollie/' + skaterId).set({
+                    id: skaterId, name: skaterName, category: category, maxBoards: maxBoards
+                }).then(function() {
+                    alert("✅ 豚跳成績發布成功！");
+                    resetFormAndClose();
+                });
+            } else {
+                database.ref('skate_jam_2026_scores/' + eventType + '/' + skaterId).once('value').then(function(snapshot) {
+                    var skaterObj = snapshot.val() || { id: skaterId, name: skaterName, category: category, scores: {} };
+                    skaterObj.name = skaterName;
+                    skaterObj.category = category;
+                    
+                    var roundData = {};
+                    if(eventType === 'speed') {
+                        roundData.score = parseFloat(document.getElementById('score-speed').value) || 0;
+                    } else if(eventType === 'street') {
+                        var j1r = parseFloat(document.getElementById('j1-run').value) || 0;
+                        var j1t = parseFloat(document.getElementById('j1-trick').value) || 0;
+                        var j2r = parseFloat(document.getElementById('j2-run').value) || 0;
+                        var j2t = parseFloat(document.getElementById('j2-trick').value) || 0;
+                        var j3r = parseFloat(document.getElementById('j3-run').value) || 0;
+                        var j3t = parseFloat(document.getElementById('j3-trick').value) || 0;
+                        var totalRun = j1r + j2r + j3r; 
+                        var totalTrick = j1t + j2t + j3t;
+                        roundData.run = totalRun; 
+                        roundData.trick = totalTrick;
+                        roundData.details = { j1r: j1r, j1t: j1t, j2r: j2r, j2t: j2t, j3r: j3r, j3t: j3t };
+                        roundData.total = totalRun + totalTrick;
+                    }
+                    
+                    if(!skaterObj.scores) skaterObj.scores = {};
+                    skaterObj.scores[round] = roundData;
+                    
+                    database.ref('skate_jam_2026_scores/' + eventType + '/' + skaterId).set(skaterObj).then(function() {
+                        alert("✅ 成績發布成功！");
+                        resetFormAndClose();
+                    });
+                });
+            }
+        });
+
+        function resetFormAndClose() {
+            document.getElementById('skater-id').value = '';
+            document.getElementById('skater-name').value = '';
+            var inputs = document.querySelectorAll('#admin-panel input[type="number"]');
+            for(var i=0; i<inputs.length; i++) inputs[i].value = '';
+            document.getElementById('admin-panel').style.display = "none";
+        }
+
+        document.getElementById('clear-data-btn').addEventListener('click', function() {
+            if (confirm("⚠️ 警告：確定要刪除雲端所有成績嗎？此動作無法復原！")) {
+                var pwd = prompt("請再次輸入管理員密碼 (預設: 8888)：");
+                if (pwd === "8888") {
+                    if (dbRef) { dbRef.remove().then(function() { alert("✅ 雲端成績已全部清空！"); document.getElementById('admin-panel').style.display = "none"; }); }
+                } else if (pwd !== null) { alert("❌ 密碼錯誤"); }
+            }
+        });
+
+        // 頁面載入時初始化
+        updateCategoryOptions('speed');
+        renderSpeed([]);
+        renderOllie([]);
+        renderStreet([]);
+    </script>
+</body>
+</html>
