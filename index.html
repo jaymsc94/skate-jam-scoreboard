@@ -74,13 +74,8 @@
         .skater-id { font-size: 1.1rem; font-weight: 700; }
         .skater-name { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
         
-        .round-badge { 
-            font-size: 0.7rem; background: var(--accent-color); color: white;
-            padding: 2px 6px; border-radius: 4px; margin-left: 6px; 
-            vertical-align: middle; font-weight: 600;
-        }
-
-        .score-detail { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+        /* 每一輪成績並排顯示樣式 */
+        .score-detail { font-size: 0.8rem; color: #555555; margin-top: 4px; font-weight: 500; background: #f2f2f2; padding: 2px 6px; border-radius: 4px; display: inline-block; }
         .final-score { font-size: 1.2rem; font-weight: 700; text-align: right; }
 
         .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; margin-bottom: 20px; }
@@ -201,7 +196,7 @@
 
                 <div class="form-group">
                     <label>參賽者姓名</label>
-                    <input type="text" id="skater-name" placeholder="例如: 陳大文" required autocomplete="off">
+                    <input type="text" id="skater-name" placeholder="placeholder" required autocomplete="off">
                 </div>
 
                 <div id="input-speed" class="dynamic-input active">
@@ -264,10 +259,9 @@
         };
 
         var localDb = { speed: [], ollie: [], street: [] };
-        var rawCloudData = null; // 全域快取原始雲端數據
 
-        function renderBoard(eventId, dataArray, scoreFormatter, isHtml) {
-            if (isHtml === undefined) isHtml = false;
+        // 終極完美看板渲染：一個選手只佔一列名次，下面列出所有輪數成績
+        function renderBoard(eventId, dataArray, eventType) {
             var container = document.getElementById(eventId);
             if (!container) return;
             container.innerHTML = '';
@@ -289,15 +283,50 @@
                     catData.forEach(function(item, index) {
                         var card = document.createElement('div');
                         card.className = 'rank-card';
-                        var scoreContent = isHtml ? scoreFormatter(item) : '<div class="final-score">' + scoreFormatter(item) + '</div>';
-                        var roundHtml = item.round ? '<span class="round-badge">' + item.round + '</span>' : '';
+                        
+                        var detailsStr = '';
+                        var bestDisplay = '';
+                        
+                        // 智能解析多輪並排字串，同時抓取最佳成績
+                        if (eventType === 'speed') {
+                            var minScore = 999999;
+                            for (var r1 in item.scores) {
+                                if (item.scores.hasOwnProperty(r1)) {
+                                    if (detailsStr !== '') detailsStr += ' | ';
+                                    detailsStr += r1 + ': ' + item.scores[r1].score + '秒';
+                                    if (item.scores[r1].score < minScore) minScore = item.scores[r1].score;
+                                }
+                            }
+                            bestDisplay = '<div class="final-score">' + minScore + ' 秒</div>';
+                        } else if (eventType === 'ollie') {
+                            var maxScore = -1;
+                            for (var r2 in item.scores) {
+                                if (item.scores.hasOwnProperty(r2)) {
+                                    if (detailsStr !== '') detailsStr += ' | ';
+                                    detailsStr += r2 + ': ' + item.scores[r2].score + '塊';
+                                    if (item.scores[r2].score > maxScore) maxScore = item.scores[r2].score;
+                                }
+                            }
+                            bestDisplay = '<div class="final-score">' + maxScore + ' 塊</div>';
+                        } else if (eventType === 'street') {
+                            var maxTotal = -1;
+                            for (var r3 in item.scores) {
+                                if (item.scores.hasOwnProperty(r3)) {
+                                    if (detailsStr !== '') detailsStr += ' | ';
+                                    detailsStr += r3 + ': ' + item.scores[r3].total.toFixed(1) + '分';
+                                    if (item.scores[r3].total > maxTotal) maxTotal = item.scores[r3].total;
+                                }
+                            }
+                            bestDisplay = '<div class="final-score">' + maxTotal.toFixed(1) + ' 分</div>';
+                        }
 
                         card.innerHTML = 
                             '<div class="rank-num">' + (index + 1) + '</div>' +
                             '<div class="skater-info">' +
-                                '<div class="skater-id">' + item.id + ' <span class="skater-name">' + item.name + '</span>' + roundHtml + '</div>' +
+                                '<div class="skater-id">' + item.id + ' <span class="skater-name">' + item.name + '</span></div>' +
+                                '<div class="score-detail">' + detailsStr + '</div>' +
                             '</div>' +
-                            '<div>' + scoreContent + '</div>';
+                            '<div>' + bestDisplay + '</div>';
                         container.appendChild(card);
                     });
                 }
@@ -305,9 +334,9 @@
         }
 
         function forceInitialRender() {
-            renderBoard('speed', [], function() { return ""; });
-            renderBoard('ollie', [], function() { return ""; });
-            renderBoard('street', [], function() { return ""; });
+            renderBoard('speed', [], 'speed');
+            renderBoard('ollie', [], 'ollie');
+            renderBoard('street', [], 'street');
         }
         forceInitialRender();
 
@@ -344,7 +373,6 @@
         }
         initAdminToggle();
 
-        // 嵌入你的 Firebase 設定
         var firebaseConfig = {
           apiKey: "AIzaSyB7MVS392XGq27V24VG94o26gvZpWj_xk4",
           authDomain: "skate-jam-2026.firebaseapp.com",
@@ -376,63 +404,41 @@
                 }
             });
 
-            // 🟢 核心過濾算法：即時聽雲端資料，並幫每位選手篩選出「個人歷史最佳成績」
+            // 實時接收雲端架構變更，並進行個人最佳成績排序
             dbRef.on('value', function(snapshot) {
                 var data = snapshot.val();
-                rawCloudData = data; // 快取用於後台智能檢查
-                
                 localDb = { speed: [], ollie: [], street: [] };
                 
                 if (data) {
-                    // 1. 速度挑戰過濾 (秒數越小越好)
-                    var speedMap = {};
-                    for(var k1 in data.speed) {
-                        if(data.speed.hasOwnProperty(k1)) {
-                            var item1 = data.speed[k1];
-                            if(!speedMap[item1.id] || item1.score < speedMap[item1.id].score) {
-                                speedMap[item1.id] = item1;
-                            }
-                        }
-                    }
-                    for(var id1 in speedMap) { if(speedMap.hasOwnProperty(id1)) localDb.speed.push(speedMap[id1]); }
-                    
-                    // 2. 豚跳鬥高過濾 (塊數越高越好)
-                    var ollieMap = {};
-                    for(var k2 in data.ollie) {
-                        if(data.ollie.hasOwnProperty(k2)) {
-                            var item2 = data.ollie[k2];
-                            if(!ollieMap[item2.id] || item2.score > ollieMap[item2.id].score) {
-                                ollieMap[item2.id] = item2;
-                            }
-                        }
-                    }
-                    for(var id2 in ollieMap) { if(ollieMap.hasOwnProperty(id2)) localDb.ollie.push(ollieMap[id2]); }
-                    
-                    // 3. 街式滑板過濾 (總分越高越好)
-                    var streetMap = {};
-                    for(var k3 in data.street) {
-                        if(data.street.hasOwnProperty(k3)) {
-                            var item3 = data.street[k3];
-                            if(!streetMap[item3.id] || item3.total > streetMap[item3.id].total) {
-                                streetMap[item3.id] = item3;
-                            }
-                        }
-                    }
-                    for(var id3 in streetMap) { if(streetMap.hasOwnProperty(id3)) localDb.street.push(streetMap[id3]); }
+                    for(var k1 in data.speed) { if(data.speed.hasOwnProperty(k1)) localDb.speed.push(data.speed[k1]); }
+                    for(var k2 in data.ollie) { if(data.ollie.hasOwnProperty(k2)) localDb.ollie.push(data.ollie[k2]); }
+                    for(var k3 in data.street) { if(data.street.hasOwnProperty(k3)) localDb.street.push(data.street[k3]); }
                 }
 
-                // 排序名次
-                localDb.speed.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.speed.sortRule; });
-                localDb.ollie.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.ollie.sortRule; });
-                localDb.street.sort(function(a, b) { return (a.total - b.total) * CONFIG.events.street.sortRule; });
+                // 速度賽排序 (取每人各輪中最小秒數)
+                localDb.speed.sort(function(a, b) {
+                    var minA = 999999; for(var rA in a.scores) { if(a.scores.hasOwnProperty(rA) && a.scores[rA].score < minA) minA = a.scores[rA].score; }
+                    var minB = 999999; for(var rB in b.scores) { if(b.scores.hasOwnProperty(rB) && b.scores[rB].score < minB) minB = b.scores[rB].score; }
+                    return minA - minB;
+                });
 
-                // 畫出名次榜
-                renderBoard('speed', localDb.speed, function(d) { return d.score + ' ' + CONFIG.events.speed.unit; });
-                renderBoard('ollie', localDb.ollie, function(d) { return d.score + ' ' + CONFIG.events.ollie.unit; });
-                renderBoard('street', localDb.street, function(d) {
-                    return '<div class="final-score">' + d.total.toFixed(1) + ' ' + CONFIG.events.street.unit + '</div>' +
-                           '<div class="score-detail">Total Run: ' + d.run.toFixed(1) + ' | Total Trick: ' + d.trick.toFixed(1) + '</div>';
-                }, true);
+                // 豚跳賽排序 (取每人各輪中最高塊數)
+                localDb.ollie.sort(function(a, b) {
+                    var maxA = -1; for(var rA in a.scores) { if(a.scores.hasOwnProperty(rA) && a.scores[rA].score > maxA) maxA = a.scores[rA].score; }
+                    var maxB = -1; for(var rB in b.scores) { if(b.scores.hasOwnProperty(rB) && b.scores[rB].score > maxB) maxB = b.scores[rB].score; }
+                    return maxB - maxA;
+                });
+
+                // 街式賽排序 (取每人各輪中最高總分)
+                localDb.street.sort(function(a, b) {
+                    var maxA = -1; for(var rA in a.scores) { if(a.scores.hasOwnProperty(rA) && a.scores[rA].total > maxA) maxA = a.scores[rA].total; }
+                    var maxB = -1; for(var rB in b.scores) { if(b.scores.hasOwnProperty(rB) && b.scores[rB].total > maxB) maxB = b.scores[rB].total; }
+                    return maxB - maxA;
+                });
+
+                renderBoard('speed', localDb.speed, 'speed');
+                renderBoard('ollie', localDb.ollie, 'ollie');
+                renderBoard('street', localDb.street, 'street');
             });
 
         } catch (error) {
@@ -454,57 +460,53 @@
             });
         }
 
-        // 後台智能檢查自動帶入
+        // 後台智能檢查預填
         function checkExistingRecord() {
             var eventType = document.getElementById('event-select').value;
             var skaterId = document.getElementById('skater-id').value.trim();
             var currentRound = document.getElementById('round-select').value;
             var submitBtn = document.getElementById('submit-btn');
             
-            if (!skaterId || !rawCloudData || !rawCloudData[eventType]) return;
+            if (!skaterId) return;
             
-            var eventRecords = rawCloudData[eventType];
-            var foundName = "";
-            var foundCategory = "";
-            var specificRecord = null;
+            var existing = null;
+            for (var i = 0; i < localDb[eventType].length; i++) {
+                if (localDb[eventType][i].id === skaterId) {
+                    existing = localDb[eventType][i];
+                    break;
+                }
+            }
             
-            // 全局掃描尋找選手基本資料與特定輪次紀錄
-            for (var key in eventRecords) {
-                if (eventRecords.hasOwnProperty(key)) {
-                    var rec = eventRecords[key];
-                    if (rec.id === skaterId) {
-                        foundName = rec.name;
-                        foundCategory = rec.category;
-                        if (rec.round === currentRound) {
-                            specificRecord = rec;
+            if (existing) {
+                document.getElementById('skater-name').value = existing.name || '';
+                if (existing.category) document.getElementById('category-select').value = existing.category;
+                
+                // 如果這一輪已經有舊成績，幫忙帶出來以便修改
+                if (existing.scores && existing.scores[currentRound]) {
+                    var rData = existing.scores[currentRound];
+                    if (eventType === 'speed') document.getElementById('score-speed').value = rData.score;
+                    if (eventType === 'ollie') document.getElementById('score-ollie').value = rData.score;
+                    if (eventType === 'street') {
+                        if (rData.details) {
+                            document.getElementById('j1-run').value = rData.details.j1r !== undefined ? rData.details.j1r : '';
+                            document.getElementById('j1-trick').value = rData.details.j1t !== undefined ? rData.details.j1t : '';
+                            document.getElementById('j2-run').value = rData.details.j2r !== undefined ? rData.details.j2r : '';
+                            document.getElementById('j2-trick').value = rData.details.j2t !== undefined ? rData.details.j2t : '';
+                            document.getElementById('j3-run').value = rData.details.j3r !== undefined ? rData.details.j3r : '';
+                            document.getElementById('j3-trick').value = rData.details.j3t !== undefined ? specificExisting.details.j3t : '';
                         }
                     }
+                    submitBtn.textContent = "更新此輪成績 (修改雲端)";
+                    submitBtn.style.backgroundColor = "var(--update-color)";
+                } else {
+                    var numInputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                    for (var k = 0; k < numInputs.length; k++) numInputs[k].value = '';
+                    submitBtn.textContent = "新增此輪成績";
+                    submitBtn.style.backgroundColor = "var(--accent-color)";
                 }
-            }
-            
-            if (foundName) {
-                document.getElementById('skater-name').value = foundName;
-                if(foundCategory) document.getElementById('category-select').value = foundCategory;
-            }
-            
-            if (specificRecord) {
-                if (eventType === 'speed') document.getElementById('score-speed').value = specificRecord.score;
-                if (eventType === 'ollie') document.getElementById('score-ollie').value = specificRecord.score;
-                if (eventType === 'street') {
-                    if(specificRecord.details) {
-                        document.getElementById('j1-run').value = specificRecord.details.j1r !== undefined ? specificRecord.details.j1r : '';
-                        document.getElementById('j1-trick').value = specificRecord.details.j1t !== undefined ? specificRecord.details.j1t : '';
-                        document.getElementById('j2-run').value = specificRecord.details.j2r !== undefined ? specificRecord.details.j2r : '';
-                        document.getElementById('j2-trick').value = specificRecord.details.j2t !== undefined ? specificRecord.details.j2t : '';
-                        document.getElementById('j3-run').value = specificRecord.details.j3r !== undefined ? specificRecord.details.j3r : '';
-                        document.getElementById('j3-trick').value = specificRecord.details.j3t !== undefined ? specificRecord.details.j3t : '';
-                    }
-                }
-                submitBtn.textContent = "更新此輪成績 (修改雲端)";
-                submitBtn.style.backgroundColor = "var(--update-color)";
             } else {
-                var numInputs = document.querySelectorAll('#admin-panel input[type="number"]');
-                for(var k=0; k<numInputs.length; k++) numInputs[k].value = '';
+                var allInputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                for (var m = 0; m < allInputs.length; m++) allInputs[m].value = '';
                 submitBtn.textContent = "新增成績";
                 submitBtn.style.backgroundColor = "var(--accent-color)";
             }
@@ -551,16 +553,32 @@
 
             if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
 
-            var newData = { id: skaterId, name: skaterName, category: category, round: round }; 
+            // 讀取該选手舊物件以保留其他輪數成績
+            var existing = null;
+            for (var i = 0; i < localDb[eventType].length; i++) {
+                if (localDb[eventType][i].id === skaterId) {
+                    existing = localDb[eventType][i];
+                    break;
+                }
+            }
+
+            var skaterObj = {
+                id: skaterId,
+                name: skaterName,
+                category: category,
+                scores: existing && existing.scores ? existing.scores : {}
+            };
+
+            var roundData = {};
 
             if (eventType === 'speed') {
                 var score = parseFloat(document.getElementById('score-speed').value);
                 if (isNaN(score)) return alert("請輸入有效秒數");
-                newData.score = score;
+                roundData.score = score;
             } else if (eventType === 'ollie') {
                 var score = parseInt(document.getElementById('score-ollie').value);
                 if (isNaN(score)) return alert("請輸入有效塊數");
-                newData.score = score;
+                roundData.score = score;
             } else if (eventType === 'street') {
                 var j1r = parseFloat(document.getElementById('j1-run').value) || 0;
                 var j1t = parseFloat(document.getElementById('j1-trick').value) || 0;
@@ -572,14 +590,17 @@
                 var totalRun = j1r + j2r + j3r;
                 var totalTrick = j1t + j2t + j3t;
 
-                newData.run = totalRun;
-                newData.trick = totalTrick;
-                newData.details = { j1r: j1r, j1t: j1t, j2r: j2r, j2t: j2t, j3r: j3r, j3t: j3t }; 
-                newData.total = (totalRun * CONFIG.events.street.weights.run) + (totalTrick * CONFIG.events.street.weights.trick);
+                roundData.run = totalRun;
+                roundData.trick = totalTrick;
+                roundData.details = { j1r: j1r, j1t: j1t, j2r: j2r, j2t: j2t, j3r: j3r, j3t: j3t }; 
+                roundData.total = (totalRun * CONFIG.events.street.weights.run) + (totalTrick * CONFIG.events.street.weights.trick);
             }
 
-            var cloudKey = skaterId + '_' + round;
-            database.ref('skate_jam_2026_scores/' + eventType + '/' + cloudKey).set(newData)
+            // 將新一輪成績塞進 scores 裡面
+            skaterObj.scores[round] = roundData;
+
+            // 用唯一 skaterId 寫入
+            database.ref('skate_jam_2026_scores/' + eventType + '/' + skaterId).set(skaterObj)
                 .then(function() {
                     document.getElementById('skater-id').value = '';
                     document.getElementById('skater-name').value = '';
