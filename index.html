@@ -3,11 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>全港校際滑板比賽2026</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
+    <title>全港校際滑板比賽2026 - 測試版</title>
     <style>
         :root {
             --bg-color: #f9f9f9;
@@ -18,97 +14,86 @@
             --border-color: #e0e0e0;
             --card-bg: #ffffff;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            line-height: 1.5;
-            -webkit-font-smoothing: antialiased;
+            background-color: var(--bg-color); color: var(--text-main); line-height: 1.5;
         }
-
         #app { max-width: 480px; margin: 0 auto; min-height: 100vh; position: relative; padding-bottom: 80px; }
-
         header { padding: 20px 16px; text-align: center; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; }
-
-        #connection-status { font-size: 0.75rem; color: #d4af37; margin-top: 4px; font-weight: 600; }
-        #connection-status.online { color: #4CAF50; }
-        #connection-status.offline { color: var(--update-color); }
-
+        #connection-status { font-size: 0.75rem; color: #4CAF50; margin-top: 4px; font-weight: 600; }
         .tabs { display: flex; background: var(--card-bg); border-bottom: 1px solid var(--border-color); }
         .tab-btn {
             flex: 1; padding: 12px 4px; border: none; background: none; 
             font-size: 0.85rem; font-weight: 700; color: var(--text-muted);
-            cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent;
+            cursor: pointer; border-bottom: 3px solid transparent;
         }
         .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
-
         .board-container { padding: 16px; display: none; }
         .board-container.active { display: block; }
-
-        .category-title {
-            font-size: 1.1rem; font-weight: 800; color: var(--accent-color);
-            margin: 24px 0 12px 0; padding-bottom: 8px;
-            border-bottom: 2px solid var(--accent-color);
-        }
-        .category-title:first-child { margin-top: 0; }
-
-        .rank-card {
-            display: flex; align-items: center; background: var(--card-bg);
-            padding: 16px; margin-bottom: 12px; border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: 1px solid var(--border-color);
-            animation: fadeIn 0.3s ease-out;
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .rank-num { font-size: 1.5rem; font-weight: 800; width: 40px; color: var(--text-muted); }
-        .rank-card:nth-of-type(1) .rank-num { color: #d4af37; } 
-        .rank-card:nth-of-type(2) .rank-num { color: #c0c0c0; } 
-        .rank-card:nth-of-type(3) .rank-num { color: #cd7f32; } 
-
-        .skater-info { flex: 1; }
-        .skater-id { font-size: 1.1rem; font-weight: 700; }
-        .skater-name { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
-        
-        .round-badge { 
-            font-size: 0.7rem; background: var(--accent-color); color: white;
-            padding: 2px 6px; border-radius: 4px; margin-left: 6px; 
-            vertical-align: middle; font-weight: 600;
-        }
-
-        .score-detail { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
-        .final-score { font-size: 1.2rem; font-weight: 700; text-align: right; }
-
-        .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; margin-bottom: 20px; }
-
+        .category-title { font-size: 1.1rem; font-weight: 800; color: var(--accent-color); margin: 24px 0 12px 0; padding-bottom: 8px; border-bottom: 2px solid var(--accent-color); }
+        .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; }
         #admin-trigger {
-            position: fixed; bottom: 20px; right: 20px;
-            background: var(--accent-color); color: white;
-            border: none; border-radius: 50%; width: 44px; height: 44px;
-            font-size: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer;
-            display: block !important; z-index: 9999;
+            position: fixed; bottom: 20px; right: 20px; background: var(--accent-color); color: white;
+            border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 20px; cursor: pointer; z-index: 9999;
         }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>全港校際滑板比賽2026</h1>
+            <div id="connection-status">🟢 本地單機測試模式 (網頁運作正常)</div>
+        </header>
 
-        #admin-panel {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: var(--card-bg); padding: 24px 16px;
-            border-top-left-radius: 16px; border-top-right-radius: 16px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-            transform: translateY(100%); transition: transform 0.3s ease;
-            z-index: 10000; max-width: 480px; margin: 0 auto;
-            max-height: 85vh; overflow-y: auto;
+        <nav class="tabs">
+            <button class="tab-btn active" data-target="speed">速度障礙</button>
+            <button class="tab-btn" data-target="ollie">豚跳鬥高</button>
+            <button class="tab-btn" data-target="street">街式滑板</button>
+        </nav>
+
+        <main>
+            <div id="speed" class="board-container active"></div>
+            <div id="ollie" class="board-container"></div>
+            <div id="street" class="board-container"></div>
+        </main>
+
+        <button id="admin-trigger" onclick="alert('大會後台運作正常！密碼是 8888')">⚙️</button>
+    </div>
+
+    <script>
+        var categories = ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"];
+        var targets = ['speed', 'ollie', 'street'];
+        
+        targets.forEach(function(id) {
+            var container = document.getElementById(id);
+            if(!container) return;
+            categories.forEach(function(cat) {
+                if(id === 'speed' && cat.indexOf('中學') > -1) return; // 速度障礙只有小學組
+                var h3 = document.createElement('h3');
+                h3.className = 'category-title';
+                h3.textContent = cat;
+                container.appendChild(h3);
+                
+                var div = document.createElement('div');
+                div.className = 'empty-state';
+                div.textContent = "尚無成績";
+                container.appendChild(div);
+            });
+        });
+
+        var tabBtns = document.querySelectorAll('.tab-btn');
+        for(var i=0; i<tabBtns.length; i++) {
+            tabBtns[i].addEventListener('click', function(e) {
+                var allBtns = document.querySelectorAll('.tab-btn');
+                for(var j=0; j<allBtns.length; j++) allBtns[j].classList.remove('active');
+                var allBoards = document.querySelectorAll('.board-container');
+                for(var k=0; k<allBoards.length; k++) allBoards[k].classList.remove('active');
+                e.target.classList.add('active');
+                document.getElementById(e.target.getAttribute('data-target')).classList.add('active');
+            });
         }
-        #admin-panel.open { transform: translateY(0); }
-
-        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .admin-header h3 { margin: 0; }
-        .admin-actions { display: flex; align-items: center; gap: 12px; }
-        .logout-btn { background: none; border: none; font-size: 0.9rem; color: var(--update-color); font-weight: 600; cursor: pointer; text-decoration: underline; }
-        .close-btn { background: none; border: none; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; line-height: 1; }
-
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 0.
+    </script>
+</body>
+</html>
