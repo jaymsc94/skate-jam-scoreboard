@@ -85,9 +85,6 @@
 
         .empty-state { text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 0.9rem; background: #f0f0f0; border-radius: 8px; margin-bottom: 20px; }
 
-        /* ==========================================
-           後台面板 (全新直覺相容排版)
-           ========================================== */
         #admin-trigger {
             position: fixed; bottom: 20px; right: 20px;
             background: var(--accent-color); color: white;
@@ -101,7 +98,7 @@
             background: var(--card-bg); padding: 24px 16px;
             border-top-left-radius: 16px; border-top-right-radius: 16px;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-            display: none; /* 🔴 預設隱藏，不使用過時的動畫位移，改用純 display 確保 iPad 相容 */
+            display: none;
             z-index: 10000; max-width: 480px; margin: 0 auto;
             max-height: 85vh; overflow-y: auto;
             border-top: 2px solid var(--accent-color);
@@ -267,6 +264,7 @@
         };
 
         var localDb = { speed: [], ollie: [], street: [] };
+        var rawCloudData = null; // 全域快取原始雲端數據
 
         function renderBoard(eventId, dataArray, scoreFormatter, isHtml) {
             if (isHtml === undefined) isHtml = false;
@@ -306,7 +304,6 @@
             });
         }
 
-        // 強制先繪製基本框架
         function forceInitialRender() {
             renderBoard('speed', [], function() { return ""; });
             renderBoard('ollie', [], function() { return ""; });
@@ -314,9 +311,6 @@
         }
         forceInitialRender();
 
-        // ==========================================
-        // 🟢 獨立高穩定性：後台登入/登出核心邏輯
-        // ==========================================
         function initAdminToggle() {
             var trigger = document.getElementById('admin-trigger');
             var panel = document.getElementById('admin-panel');
@@ -327,7 +321,6 @@
                 trigger.onclick = function() {
                     var sessionExpiry = localStorage.getItem('skate_admin_expiry');
                     var now = new Date().getTime();
-                    // 檢查 Session
                     if (sessionExpiry && now < parseInt(sessionExpiry)) {
                         localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
                         panel.style.display = "block";
@@ -336,15 +329,11 @@
                         if (pwd === CONFIG.adminPassword) {
                             localStorage.setItem('skate_admin_expiry', new Date().getTime() + CONFIG.sessionDuration);
                             panel.style.display = "block";
-                        } else if (pwd !== null) {
-                            alert("密碼錯誤");
-                        }
+                        } else if (pwd !== null) { alert("密碼錯誤"); }
                     }
                 };
             }
-            if(closeBtn && panel) {
-                closeBtn.onclick = function() { panel.style.display = "none"; };
-            }
+            if(closeBtn && panel) closeBtn.onclick = function() { panel.style.display = "none"; };
             if(logoutBtn && panel) {
                 logoutBtn.onclick = function() {
                     localStorage.removeItem('skate_admin_expiry');
@@ -355,11 +344,11 @@
         }
         initAdminToggle();
 
-        // 填妥的真實 Firebase 設定
+        // 嵌入你的 Firebase 設定
         var firebaseConfig = {
           apiKey: "AIzaSyB7MVS392XGq27V24VG94o26gvZpWj_xk4",
           authDomain: "skate-jam-2026.firebaseapp.com",
-          databaseURL: "https://skate-jam-2026-default-rtdb.firebaseio.com",
+          databaseURL: "https://skate-jam-2026-default-rtdb.firebaseio.com/", //
           projectId: "skate-jam-2026",
           storageBucket: "skate-jam-2026.firebasestorage.app",
           messagingSenderId: "1069864791525",
@@ -387,23 +376,57 @@
                 }
             });
 
+            // 🟢 核心過濾算法：即時聽雲端資料，並幫每位選手篩選出「個人歷史最佳成績」
             dbRef.on('value', function(snapshot) {
                 var data = snapshot.val();
+                rawCloudData = data; // 快取用於後台智能檢查
+                
+                localDb = { speed: [], ollie: [], street: [] };
+                
                 if (data) {
-                    localDb.speed = [];
-                    for(var k1 in data.speed) { if(data.speed.hasOwnProperty(k1)) localDb.speed.push(data.speed[k1]); }
-                    localDb.ollie = [];
-                    for(var k2 in data.ollie) { if(data.ollie.hasOwnProperty(k2)) localDb.ollie.push(data.ollie[k2]); }
-                    localDb.street = [];
-                    for(var k3 in data.street) { if(data.street.hasOwnProperty(k3)) localDb.street.push(data.street[k3]); }
-                } else {
-                    localDb = { speed: [], ollie: [], street: [] };
+                    // 1. 速度挑戰過濾 (秒數越小越好)
+                    var speedMap = {};
+                    for(var k1 in data.speed) {
+                        if(data.speed.hasOwnProperty(k1)) {
+                            var item1 = data.speed[k1];
+                            if(!speedMap[item1.id] || item1.score < speedMap[item1.id].score) {
+                                speedMap[item1.id] = item1;
+                            }
+                        }
+                    }
+                    for(var id1 in speedMap) { if(speedMap.hasOwnProperty(id1)) localDb.speed.push(speedMap[id1]); }
+                    
+                    // 2. 豚跳鬥高過濾 (塊數越高越好)
+                    var ollieMap = {};
+                    for(var k2 in data.ollie) {
+                        if(data.ollie.hasOwnProperty(k2)) {
+                            var item2 = data.ollie[k2];
+                            if(!ollieMap[item2.id] || item2.score > ollieMap[item2.id].score) {
+                                ollieMap[item2.id] = item2;
+                            }
+                        }
+                    }
+                    for(var id2 in ollieMap) { if(ollieMap.hasOwnProperty(id2)) localDb.ollie.push(ollieMap[id2]); }
+                    
+                    // 3. 街式滑板過濾 (總分越高越好)
+                    var streetMap = {};
+                    for(var k3 in data.street) {
+                        if(data.street.hasOwnProperty(k3)) {
+                            var item3 = data.street[k3];
+                            if(!streetMap[item3.id] || item3.total > streetMap[item3.id].total) {
+                                streetMap[item3.id] = item3;
+                            }
+                        }
+                    }
+                    for(var id3 in streetMap) { if(streetMap.hasOwnProperty(id3)) localDb.street.push(streetMap[id3]); }
                 }
 
+                // 排序名次
                 localDb.speed.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.speed.sortRule; });
                 localDb.ollie.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.ollie.sortRule; });
                 localDb.street.sort(function(a, b) { return (a.total - b.total) * CONFIG.events.street.sortRule; });
 
+                // 畫出名次榜
                 renderBoard('speed', localDb.speed, function(d) { return d.score + ' ' + CONFIG.events.speed.unit; });
                 renderBoard('ollie', localDb.ollie, function(d) { return d.score + ' ' + CONFIG.events.ollie.unit; });
                 renderBoard('street', localDb.street, function(d) {
@@ -431,59 +454,57 @@
             });
         }
 
+        // 後台智能檢查自動帶入
         function checkExistingRecord() {
             var eventType = document.getElementById('event-select').value;
             var skaterId = document.getElementById('skater-id').value.trim();
             var currentRound = document.getElementById('round-select').value;
             var submitBtn = document.getElementById('submit-btn');
             
-            if (!skaterId) return;
+            if (!skaterId || !rawCloudData || !rawCloudData[eventType]) return;
             
-            var existing = null;
-            for(var i=0; i<localDb[eventType].length; i++) {
-                if(localDb[eventType][i].id === skaterId) {
-                    existing = localDb[eventType][i];
-                    break;
+            var eventRecords = rawCloudData[eventType];
+            var foundName = "";
+            var foundCategory = "";
+            var specificRecord = null;
+            
+            // 全局掃描尋找選手基本資料與特定輪次紀錄
+            for (var key in eventRecords) {
+                if (eventRecords.hasOwnProperty(key)) {
+                    var rec = eventRecords[key];
+                    if (rec.id === skaterId) {
+                        foundName = rec.name;
+                        foundCategory = rec.category;
+                        if (rec.round === currentRound) {
+                            specificRecord = rec;
+                        }
+                    }
                 }
             }
             
-            var specificExisting = null;
-            for(var j=0; j<localDb[eventType].length; j++) {
-                if(localDb[eventType][j].id === skaterId && localDb[eventType][j].round === currentRound) {
-                    specificExisting = localDb[eventType][j];
-                    break;
-                }
+            if (foundName) {
+                document.getElementById('skater-name').value = foundName;
+                if(foundCategory) document.getElementById('category-select').value = foundCategory;
             }
             
-            if (specificExisting) {
-                document.getElementById('skater-name').value = specificExisting.name || '';
-                if (specificExisting.category) document.getElementById('category-select').value = specificExisting.category;
-                
-                if (eventType === 'speed') document.getElementById('score-speed').value = specificExisting.score;
-                if (eventType === 'ollie') document.getElementById('score-ollie').value = specificExisting.score;
+            if (specificRecord) {
+                if (eventType === 'speed') document.getElementById('score-speed').value = specificRecord.score;
+                if (eventType === 'ollie') document.getElementById('score-ollie').value = specificRecord.score;
                 if (eventType === 'street') {
-                    if(specificExisting.details) {
-                        document.getElementById('j1-run').value = specificExisting.details.j1r !== undefined ? specificExisting.details.j1r : '';
-                        document.getElementById('j1-trick').value = specificExisting.details.j1t !== undefined ? specificExisting.details.j1t : '';
-                        document.getElementById('j2-run').value = specificExisting.details.j2r !== undefined ? specificExisting.details.j2r : '';
-                        document.getElementById('j2-trick').value = specificExisting.details.j2t !== undefined ? specificExisting.details.j2t : '';
-                        document.getElementById('j3-run').value = specificExisting.details.j3r !== undefined ? specificExisting.details.j3r : '';
-                        document.getElementById('j3-trick').value = specificExisting.details.j3t !== undefined ? specificExisting.details.j3t : '';
+                    if(specificRecord.details) {
+                        document.getElementById('j1-run').value = specificRecord.details.j1r !== undefined ? specificRecord.details.j1r : '';
+                        document.getElementById('j1-trick').value = specificRecord.details.j1t !== undefined ? specificRecord.details.j1t : '';
+                        document.getElementById('j2-run').value = specificRecord.details.j2r !== undefined ? specificRecord.details.j2r : '';
+                        document.getElementById('j2-trick').value = specificRecord.details.j2t !== undefined ? specificRecord.details.j2t : '';
+                        document.getElementById('j3-run').value = specificRecord.details.j3r !== undefined ? specificRecord.details.j3r : '';
+                        document.getElementById('j3-trick').value = specificRecord.details.j3t !== undefined ? specificRecord.details.j3t : '';
                     }
                 }
                 submitBtn.textContent = "更新此輪成績 (修改雲端)";
                 submitBtn.style.backgroundColor = "var(--update-color)";
-            } else if (existing) {
-                document.getElementById('skater-name').value = existing.name || '';
-                if (existing.category) document.getElementById('category-select').value = existing.category;
-                
+            } else {
                 var numInputs = document.querySelectorAll('#admin-panel input[type="number"]');
                 for(var k=0; k<numInputs.length; k++) numInputs[k].value = '';
-                submitBtn.textContent = "新增成績";
-                submitBtn.style.backgroundColor = "var(--accent-color)";
-            } else {
-                var allInputs = document.querySelectorAll('#admin-panel input[type="number"]');
-                for(var m=0; m<allInputs.length; m++) allInputs[m].value = '';
                 submitBtn.textContent = "新增成績";
                 submitBtn.style.backgroundColor = "var(--accent-color)";
             }
