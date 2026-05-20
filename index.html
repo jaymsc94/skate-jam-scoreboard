@@ -68,9 +68,7 @@
             display: flex; flex-direction: column; gap: 8px; background: var(--card-bg);
             padding: 16px; margin-bottom: 12px; border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid var(--border-color);
-            animation: fadeIn 0.3s ease-out;
         }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .card-main { display: flex; justify-content: space-between; align-items: center; }
         .skater-info { display: flex; align-items: center; }
@@ -239,9 +237,12 @@
         var activeSubTabs = { speed: '第一輪', ollie: 1 };
 
         function switchTab(target) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.board-container').forEach(c => c.classList.remove('active'));
-            document.querySelector(`button[data-target="${target}"]`).classList.add('active');
+            var btns = document.querySelectorAll('.tab-btn');
+            for(var i=0; i<btns.length; i++) { btns[i].classList.remove('active'); }
+            var containers = document.querySelectorAll('.board-container');
+            for(var j=0; j<containers.length; j++) { containers[j].classList.remove('active'); }
+            
+            document.querySelector('button[data-target="' + target + '"]').classList.add('active');
             document.getElementById(target).classList.add('active');
         }
 
@@ -254,7 +255,9 @@
 
         function updateInputs() {
             var eventType = document.getElementById('event-select').value;
-            document.querySelectorAll('.dynamic-input').forEach(el => el.classList.remove('active'));
+            var inputs = document.querySelectorAll('.dynamic-input');
+            for(var i=0; i<inputs.length; i++) { inputs[i].classList.remove('active'); }
+            
             document.getElementById('input-' + eventType).classList.add('active');
             updateCategoryOptions(eventType);
             
@@ -301,9 +304,16 @@
 
             dbRef.on('value', function(snapshot) {
                 var data = snapshot.val() || {};
-                localDb.speed = data.speed ? Object.values(data.speed) : [];
-                localDb.ollie = data.ollie ? Object.values(data.ollie) : [];
-                localDb.street = data.street ? Object.values(data.street) : [];
+                
+                // ES5 相容 Object.values 寫法
+                localDb.speed = [];
+                for(var k1 in data.speed) { if(data.speed.hasOwnProperty(k1)) localDb.speed.push(data.speed[k1]); }
+                
+                localDb.ollie = [];
+                for(var k2 in data.ollie) { if(data.ollie.hasOwnProperty(k2)) localDb.ollie.push(data.ollie[k2]); }
+                
+                localDb.street = [];
+                for(var k3 in data.street) { if(data.street.hasOwnProperty(k3)) localDb.street.push(data.street[k3]); }
 
                 renderSpeed(localDb.speed);
                 renderOllie(localDb.ollie);
@@ -320,216 +330,43 @@
             var container = document.getElementById('speed');
             if(!speedData || speedData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
 
-            // 尋找存在的所有輪次
-            var allRounds = new Set();
-            speedData.forEach(p => { if(p.scores) Object.keys(p.scores).forEach(r => allRounds.add(r)); });
-            var roundsArr = Array.from(allRounds).sort();
+            // 尋找存在的所有輪次 (ES5 相容)
+            var roundsObj = {};
+            for(var i=0; i<speedData.length; i++) {
+                if(speedData[i].scores) {
+                    for(var r in speedData[i].scores) {
+                        if(speedData[i].scores.hasOwnProperty(r)) roundsObj[r] = true;
+                    }
+                }
+            }
+            var roundsArr = [];
+            for(var key in roundsObj) { if(roundsObj.hasOwnProperty(key)) roundsArr.push(key); }
+            roundsArr.sort();
+            
             if(roundsArr.length === 0) roundsArr = ['第一輪'];
-            if(!roundsArr.includes(activeSubTabs.speed)) activeSubTabs.speed = roundsArr[0];
+            
+            var currentRoundExists = false;
+            for(var j=0; j<roundsArr.length; j++) { if(roundsArr[j] === activeSubTabs.speed) currentRoundExists = true; }
+            if(!currentRoundExists) activeSubTabs.speed = roundsArr[0];
 
             var currentRound = activeSubTabs.speed;
 
             // 繪製子分頁按鈕
             var html = '<div class="sub-tabs">';
-            roundsArr.forEach(r => {
-                html += '<button class="sub-tab-btn ' + (r === currentRound ? 'active' : '') + '" onclick="setSubTab(\'speed\', \'' + r + '\')">' + r + '</button>';
-            });
-            html += '</div>';
-
-            // 繪製各組別在該輪次的成績
-            CONFIG.events.speed.categories.forEach(cat => {
-                var catData = speedData.filter(p => p.category === cat && p.scores && p.scores[currentRound]);
-                html += '<h3 class="category-title">' + cat + '</h3>';
-                
-                if(catData.length === 0) {
-                    html += '<div class="empty-state">此輪尚無成績</div>';
-                } else {
-                    catData.sort((a,b) => a.scores[currentRound].score - b.scores[currentRound].score);
-                    catData.forEach((p, index) => {
-                        html += `
-                            <div class="rank-card">
-                                <div class="card-main">
-                                    <div class="skater-info">
-                                        <div class="rank-num">${index + 1}</div>
-                                        <div class="skater-id">${p.id} <span class="skater-name">${p.name}</span></div>
-                                    </div>
-                                    <div class="final-score">${p.scores[currentRound].score.toFixed(2)} <span>秒</span></div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-            });
-            container.innerHTML = html;
-        }
-
-        // ==========================================
-        // 渲染：豚跳鬥高 (每塊過關人數一頁)
-        // ==========================================
-        function renderOllie(ollieData) {
-            var container = document.getElementById('ollie');
-            if(!ollieData || ollieData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
-
-            // 尋找最高挑戰板數
-            var overallMax = 0;
-            ollieData.forEach(p => {
-                var m = parseInt(p.maxBoards) || 0;
-                if(m > overallMax) overallMax = m;
-            });
-            if(overallMax === 0) overallMax = 1;
-            if(activeSubTabs.ollie > overallMax) activeSubTabs.ollie = overallMax;
-
-            var currentBoard = activeSubTabs.ollie;
-
-            // 繪製子分頁按鈕 (第 1 塊, 第 2 塊...)
-            var html = '<div class="sub-tabs">';
-            for(var i = 1; i <= overallMax; i++) {
-                html += '<button class="sub-tab-btn ' + (i === currentBoard ? 'active' : '') + '" onclick="setSubTab(\'ollie\', ' + i + ')">第 ' + i + ' 塊</button>';
+            for(var k=0; k<roundsArr.length; k++) {
+                var rName = roundsArr[k];
+                var activeClass = (rName === currentRound) ? 'active' : '';
+                html += '<button class="sub-tab-btn ' + activeClass + '" onclick="setSubTab(\'speed\', \'' + rName + '\')">' + rName + '</button>';
             }
             html += '</div>';
 
-            CONFIG.events.ollie.categories.forEach(cat => {
-                // 篩選出該組別中，最高板數 >= 當前查看板數的選手 (代表他有通過這塊)
-                var catData = ollieData.filter(p => p.category === cat && (parseInt(p.maxBoards)||0) >= currentBoard);
-                html += '<h3 class="category-title">' + cat + '</h3>';
-                
-                if(catData.length === 0) {
-                    html += '<div class="empty-state">此高度尚無選手過關</div>';
-                } else {
-                    html += '<div class="pass-count">共 ' + catData.length + ' 人成功跨越此高度</div>';
-                    // 按照他們整體的最高成績排序，最強的排前面
-                    catData.sort((a,b) => (parseInt(b.maxBoards)||0) - (parseInt(a.maxBoards)||0));
-                    
-                    catData.forEach((p, index) => {
-                        html += `
-                            <div class="rank-card">
-                                <div class="card-main">
-                                    <div class="skater-info">
-                                        <div class="skater-id">${p.id} <span class="skater-name">${p.name}</span></div>
-                                    </div>
-                                    <div class="pass-status">✅ 過關</div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-            });
-            container.innerHTML = html;
-        }
-
-        // ==========================================
-        // 渲染：街式滑板 (保持一頁列出最佳總分與明細)
-        // ==========================================
-        function renderStreet(streetData) {
-            var container = document.getElementById('street');
-            if(!streetData || streetData.length === 0) { container.innerHTML = '<div class="empty-state">尚無成績</div>'; return; }
-
-            var html = '';
-            CONFIG.events.street.categories.forEach(cat => {
-                var catData = streetData.filter(p => p.category === cat);
-                html += '<h3 class="category-title">' + cat + '</h3>';
-
-                if(catData.length === 0) {
-                    html += '<div class="empty-state">尚無成績</div>';
-                } else {
-                    // 取最高總分排序
-                    catData.forEach(p => {
-                        p.bestTotal = -1;
-                        if(p.scores) {
-                            Object.keys(p.scores).forEach(r => {
-                                if(p.scores[r].total > p.bestTotal) p.bestTotal = p.scores[r].total;
-                            });
-                        }
-                    });
-                    catData.sort((a,b) => b.bestTotal - a.bestTotal);
-
-                    catData.forEach((p, index) => {
-                        var detailsStr = '';
-                        if(p.scores) {
-                            Object.keys(p.scores).sort().forEach(r => {
-                                if (detailsStr !== '') detailsStr += '<br>';
-                                detailsStr += r + ': Run:' + p.scores[r].run.toFixed(1) + ' Trick:' + p.scores[r].trick.toFixed(1) + ' (總:' + p.scores[r].total.toFixed(1) + ')';
-                            });
-                        }
-
-                        html += `
-                            <div class="rank-card">
-                                <div class="card-main">
-                                    <div class="skater-info">
-                                        <div class="rank-num">${index + 1}</div>
-                                        <div class="skater-id">${p.id} <span class="skater-name">${p.name}</span></div>
-                                    </div>
-                                    <div class="final-score">${p.bestTotal.toFixed(1)} <span>分</span></div>
-                                </div>
-                                <div class="score-detail">${detailsStr}</div>
-                            </div>
-                        `;
-                    });
-                }
-            });
-            container.innerHTML = html;
-        }
-
-        function updateCategoryOptions(eventType) {
-            var catSelect = document.getElementById('category-select');
-            if(!catSelect) return;
-            catSelect.innerHTML = ''; 
-            CONFIG.events[eventType].categories.forEach(function(cat) {
-                var opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; catSelect.appendChild(opt);
-            });
-        }
-
-        function checkExistingRecord() {
-            var eventType = document.getElementById('event-select').value;
-            var skaterId = document.getElementById('skater-id').value.trim();
-            var currentRound = document.getElementById('round-select').value;
-            var submitBtn = document.getElementById('submit-btn');
-            if (!skaterId) return;
-            
-            var existing = null;
-            for (var i = 0; i < localDb[eventType].length; i++) {
-                if (localDb[eventType][i].id === skaterId) { existing = localDb[eventType][i]; break; }
-            }
-            
-            if (existing) {
-                document.getElementById('skater-name').value = existing.name || '';
-                if (existing.category) document.getElementById('category-select').value = existing.category;
-                
-                if (eventType === 'ollie') {
-                    document.getElementById('score-ollie').value = existing.maxBoards || '';
-                    submitBtn.textContent = "更新成績";
-                } else if (existing.scores && existing.scores[currentRound]) {
-                    var rData = existing.scores[currentRound];
-                    if (eventType === 'speed') document.getElementById('score-speed').value = rData.score;
-                    if (eventType === 'street' && rData.details) {
-                        document.getElementById('j1-run').value = rData.details.j1r || '';
-                        document.getElementById('j1-trick').value = rData.details.j1t || '';
-                        document.getElementById('j2-run').value = rData.details.j2r || '';
-                        document.getElementById('j2-trick').value = rData.details.j2t || '';
-                        document.getElementById('j3-run').value = rData.details.j3r || '';
-                        document.getElementById('j3-trick').value = rData.details.j3t || '';
+            // 繪製各組別成績
+            CONFIG.events.speed.categories.forEach(function(cat) {
+                var catData = [];
+                for(var m=0; m<speedData.length; m++) {
+                    if(speedData[m].category === cat && speedData[m].scores && speedData[m].scores[currentRound]) {
+                        catData.push(speedData[m]);
                     }
-                    submitBtn.textContent = "更新此輪成績";
-                    submitBtn.style.backgroundColor = "var(--update-color)";
-                } else {
-                    var numInputs = document.querySelectorAll('#admin-panel input[type="number"]');
-                    for (var k = 0; k < numInputs.length; k++) numInputs[k].value = '';
-                    submitBtn.textContent = "新增此輪成績";
-                    submitBtn.style.backgroundColor = "var(--accent-color)";
                 }
-            } else {
-                var allInputs = document.querySelectorAll('#admin-panel input[type="number"]');
-                for (var m = 0; m < allInputs.length; m++) allInputs[m].value = '';
-                submitBtn.textContent = "新增成績";
-                submitBtn.style.backgroundColor = "var(--accent-color)";
-            }
-        }
-
-        document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
-        document.getElementById('round-select').addEventListener('change', checkExistingRecord);
-
-        document.getElementById('score-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (!database) return alert("系統未能連接雲端！");
-
-            var eventType = document
+                
+                html += '<h3 class
