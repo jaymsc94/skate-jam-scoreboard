@@ -352,4 +352,206 @@
 
                 localDb.speed.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.speed.sortRule; });
                 localDb.ollie.sort(function(a, b) { return (a.score - b.score) * CONFIG.events.ollie.sortRule; });
-                localDb.street
+                localDb.street.sort(function(a, b) { return (a.total - b.total) * CONFIG.events.street.sortRule; });
+
+                renderBoard('speed', localDb.speed, function(d) { return d.score + ' ' + CONFIG.events.speed.unit; });
+                renderBoard('ollie', localDb.ollie, function(d) { return d.score + ' ' + CONFIG.events.ollie.unit; });
+                renderBoard('street', localDb.street, function(d) {
+                    return '<div class="final-score">' + d.total.toFixed(1) + ' ' + CONFIG.events.street.unit + '</div>' +
+                           '<div class="score-detail">Total Run: ' + d.run.toFixed(1) + ' | Total Trick: ' + d.trick.toFixed(1) + '</div>';
+                }, true);
+            });
+
+        } catch (error) {
+            statusEl.textContent = "🔴 系統錯誤: " + error.message;
+            statusEl.className = 'offline';
+        }
+
+        function updateCategoryOptions(eventType) {
+            var catSelect = document.getElementById('category-select');
+            catSelect.innerHTML = ''; 
+            CONFIG.events[eventType].categories.forEach(function(cat) {
+                var opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
+            });
+        }
+
+        function checkExistingRecord() {
+            var eventType = document.getElementById('event-select').value;
+            var skaterId = document.getElementById('skater-id').value.trim();
+            var submitBtn = document.getElementById('submit-btn');
+            
+            if (!skaterId) return;
+            
+            var existing = null;
+            for(var i=0; i<localDb[eventType].length; i++) {
+                if(localDb[eventType][i].id === skaterId) {
+                    existing = localDb[eventType][i];
+                    break;
+                }
+            }
+            
+            if (existing) {
+                document.getElementById('skater-name').value = existing.name || '';
+                if (existing.category) document.getElementById('category-select').value = existing.category;
+                if (existing.round) document.getElementById('round-select').value = existing.round;
+
+                if (eventType === 'speed') document.getElementById('score-speed').value = existing.score;
+                if (eventType === 'ollie') document.getElementById('score-ollie').value = existing.score;
+                if (eventType === 'street') {
+                    if(existing.details) {
+                        document.getElementById('j1-run').value = existing.details.j1r !== undefined ? existing.details.j1r : '';
+                        document.getElementById('j1-trick').value = existing.details.j1t !== undefined ? existing.details.j1t : '';
+                        document.getElementById('j2-run').value = existing.details.j2r !== undefined ? existing.details.j2r : '';
+                        document.getElementById('j2-trick').value = existing.details.j2t !== undefined ? existing.details.j2t : '';
+                        document.getElementById('j3-run').value = existing.details.j3r !== undefined ? existing.details.j3r : '';
+                        document.getElementById('j3-trick').value = existing.details.j3t !== undefined ? existing.details.j3t : '';
+                    }
+                }
+                submitBtn.textContent = "更新成績 (上傳至雲端)";
+                submitBtn.style.backgroundColor = "var(--update-color)";
+            } else {
+                var inputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                for(var j=0; j<inputs.length; j++) inputs[j].value = '';
+                document.getElementById('round-select').selectedIndex = 0;
+                submitBtn.textContent = "新增成績";
+                submitBtn.style.backgroundColor = "var(--accent-color)";
+            }
+        }
+
+        document.getElementById('skater-id').addEventListener('input', checkExistingRecord);
+        
+        document.getElementById('event-select').addEventListener('change', function(e) {
+            var eventType = e.target.value;
+            var inputs = document.querySelectorAll('.dynamic-input');
+            for(var i=0; i<inputs.length; i++) inputs[i].classList.remove('active');
+            
+            document.getElementById('input-' + eventType).classList.add('active');
+            updateCategoryOptions(eventType);
+            checkExistingRecord();
+        });
+
+        var tabBtns = document.querySelectorAll('.tab-btn');
+        for(var i=0; i<tabBtns.length; i++) {
+            tabBtns[i].addEventListener('click', function(e) {
+                var allBtns = document.querySelectorAll('.tab-btn');
+                for(var j=0; j<allBtns.length; j++) allBtns[j].classList.remove('active');
+                
+                var allBoards = document.querySelectorAll('.board-container');
+                for(var k=0; k<allBoards.length; k++) allBoards[k].classList.remove('active');
+                
+                e.target.classList.add('active');
+                document.getElementById(e.target.getAttribute('data-target')).classList.add('active');
+            });
+        }
+
+        var adminPanel = document.getElementById('admin-panel');
+        document.getElementById('admin-trigger').addEventListener('click', function() {
+            var sessionExpiry = localStorage.getItem('skate_admin_expiry');
+            var now = new Date().getTime();
+            if (sessionExpiry && now < parseInt(sessionExpiry)) {
+                localStorage.setItem('skate_admin_expiry', now + CONFIG.sessionDuration);
+                adminPanel.classList.add('open');
+            } else {
+                var pwd = prompt("請輸入管理員密碼 (預設：8888)：");
+                if (pwd === CONFIG.adminPassword) {
+                    localStorage.setItem('skate_admin_expiry', new Date().getTime() + CONFIG.sessionDuration);
+                    adminPanel.classList.add('open');
+                } else if (pwd !== null) { alert("密碼錯誤"); }
+            }
+        });
+
+        document.getElementById('logout-admin').addEventListener('click', function() {
+            localStorage.removeItem('skate_admin_expiry');
+            adminPanel.classList.remove('open');
+            alert("已成功登出。");
+        });
+        
+        document.getElementById('close-admin').addEventListener('click', function() {
+            adminPanel.classList.remove('open');
+        });
+
+        document.getElementById('score-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!database) return alert("系統未能連接雲端，無法上傳成績！");
+
+            localStorage.setItem('skate_admin_expiry', new Date().getTime() + CONFIG.sessionDuration);
+
+            var eventType = document.getElementById('event-select').value;
+            var skaterId = document.getElementById('skater-id').value.trim();
+            var skaterName = document.getElementById('skater-name').value.trim();
+            var category = document.getElementById('category-select').value; 
+            var round = document.getElementById('round-select').value;
+
+            if (!skaterId || !skaterName) return alert("請輸入參賽者編號與姓名");
+
+            var newData = { id: skaterId, name: skaterName, category: category, round: round }; 
+
+            if (eventType === 'speed') {
+                var score = parseFloat(document.getElementById('score-speed').value);
+                if (isNaN(score)) return alert("請輸入有效秒數");
+                newData.score = score;
+            } else if (eventType === 'ollie') {
+                var score = parseInt(document.getElementById('score-ollie').value);
+                if (isNaN(score)) return alert("請輸入有效塊數");
+                newData.score = score;
+            } else if (eventType === 'street') {
+                var j1r = parseFloat(document.getElementById('j1-run').value) || 0;
+                var j1t = parseFloat(document.getElementById('j1-trick').value) || 0;
+                var j2r = parseFloat(document.getElementById('j2-run').value) || 0;
+                var j2t = parseFloat(document.getElementById('j2-trick').value) || 0;
+                var j3r = parseFloat(document.getElementById('j3-run').value) || 0;
+                var j3t = parseFloat(document.getElementById('j3-trick').value) || 0;
+                
+                var totalRun = j1r + j2r + j3r;
+                var totalTrick = j1t + j2t + j3t;
+
+                newData.run = totalRun;
+                newData.trick = totalTrick;
+                newData.details = { j1r: j1r, j1t: j1t, j2r: j2r, j2t: j2t, j3r: j3r, j3t: j3t }; 
+                newData.total = (totalRun * CONFIG.events.street.weights.run) + (totalTrick * CONFIG.events.street.weights.trick);
+            }
+
+            database.ref('skate_jam_2026_scores/' + eventType + '/' + skaterId).set(newData)
+                .then(function() {
+                    document.getElementById('skater-id').value = '';
+                    document.getElementById('skater-name').value = '';
+                    var inputs = document.querySelectorAll('#admin-panel input[type="number"]');
+                    for(var i=0; i<inputs.length; i++) inputs[i].value = '';
+                    
+                    var submitBtn = document.getElementById('submit-btn');
+                    submitBtn.textContent = "新增成績";
+                    submitBtn.style.backgroundColor = "var(--accent-color)";
+                    
+                    document.querySelector('.tab-btn[data-target="' + eventType + '"]').click();
+                    document.activeElement.blur(); 
+                    adminPanel.classList.remove('open');
+                })
+                .catch(function(error) {
+                    alert("上傳失敗，請檢查網絡連線: " + error.message);
+                });
+        });
+
+        document.getElementById('clear-data-btn').addEventListener('click', function() {
+            if (confirm("⚠️ 警告：確定要刪除雲端所有比賽項目的成績嗎？此動作無法復原，所有觀眾的手機都會即時清空！")) {
+                var pwd = prompt("請再次輸入管理員密碼 (預設為 8888)：");
+                if (pwd === CONFIG.adminPassword) {
+                    if (dbRef) {
+                        dbRef.remove().then(function() {
+                            alert("✅ 雲端成績已全部清空！");
+                            adminPanel.classList.remove('open');
+                        });
+                    }
+                } else if (pwd !== null) {
+                    alert("❌ 密碼錯誤，取消清除動作。");
+                }
+            }
+        });
+
+        updateCategoryOptions('speed'); 
+    </script>
+</body>
+</html>
