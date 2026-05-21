@@ -222,7 +222,7 @@
 
     <script>
         var CONFIG = {
-            adminPassword: "8888",
+            adminPassword: "2827",
             events: {
                 speed: { name: "速度挑戰比賽", unit: "秒", categories: ["小學男子組", "小學女子組"] },
                 ollie: { name: "豚跳鬥高比賽", unit: "塊", categories: ["小學男子組", "小學女子組", "中學(15歲或以下)男子組", "中學(16-18歲)男子組", "中學女子組"] },
@@ -665,7 +665,7 @@
         document.getElementById('clear-data-btn').addEventListener('click', function() {
             if (confirm("⚠️ 警告：確定要刪除雲端所有成績嗎？此動作無法復原！")) {
                 var pwd = prompt("請輸入管理員密碼：");
-                if (pwd === "8888") {
+                if (pwd === "2827") {
                     if (dbRef) { dbRef.remove().then(function() { alert("✅ 雲端成績已全部清空！"); document.getElementById('admin-panel').style.display = "none"; }); }
                 } else if (pwd !== null) { alert("❌ 密碼錯誤"); }
             }
@@ -674,7 +674,7 @@
         // 打開後台密碼驗證
         function openAdminPanel() {
             var pwd = prompt("請輸入管理員密碼：");
-            if (pwd === "8888") {
+            if (pwd === "2827") {
                 document.getElementById('admin-panel').style.display='block';
             } else if (pwd !== null) {
                 alert("密碼錯誤");
